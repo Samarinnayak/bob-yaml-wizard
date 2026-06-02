@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Visual CICS Configuration Builder with AI-Powered Assistance">
+    <meta name="keywords" content="CICS, z/OS, mainframe, configuration, YAML, AI">
+    <meta name="author" content="Bob YAML Wizard Team">
+
+    <!-- Security -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self';
+                   script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
+                   style-src 'self' 'unsafe-inline';
+                   img-src 'self' data: https:;">
+
+    <title>Bob YAML Wizard - Visual CICS Configuration Builder</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="/src/styles/main.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-content">
+            <div class="header-left">
+                <h1 class="app-title">
+                    <span class="icon">🤖</span>
+                    Bob YAML Wizard
+                </h1>
+                <span class="app-subtitle">Visual CICS Configuration Builder</span>
+            </div>
+            <div class="header-right">
+                <button id="theme-toggle" class="icon-button" aria-label="Toggle theme">
+                    <span class="icon">🌙</span>
+                </button>
+                <button id="help-button" class="icon-button" aria-label="Help">
+                    <span class="icon">❓</span>
+                </button>
+                <button id="share-button" class="button button-primary">
+                    <span class="icon">🔗</span>
+                    Share
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="app-main">
+        <!-- Desktop Layout: 3 Panels -->
+        <div class="desktop-layout">
+            <!-- Chat Panel -->
+            <section class="panel chat-panel">
+                <div class="panel-header">
+                    <h2>Chat with Bob</h2>
+                </div>
+                <div class="panel-content">
+                    <div id="chat-messages" class="chat-messages">
+                        <!-- Welcome message -->
+                        <div class="message message-bob">
+                            <div class="message-avatar">🤖</div>
+                            <div class="message-content">
+                                <div class="message-text">
+                                    <p>Hi! I'm Bob, your CICS configuration assistant. 👋</p>
+                                    <p>I'll help you build CICS configurations through conversation. Just tell me what you need!</p>
+                                    <p><strong>Try saying:</strong></p>
+                                    <ul>
+                                        <li>"Create a CICS region for development"</li>
+                                        <li>"Add Java support"</li>
+                                        <li>"Enable remote management"</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chat-input-container">
+                        <div id="typing-indicator" class="typing-indicator" style="display: none;">
+                            <span></span><span></span><span></span>
+                        </div>
+                        <div class="chat-input">
+                            <input
+                                type="text"
+                                id="user-input"
+                                placeholder="Ask Bob anything..."
+                                autocomplete="off"
+                            >
+                            <button id="send-button" class="button button-primary">
+                                Send
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Diagram Panel -->
+            <section class="panel diagram-panel">
+                <div class="panel-header">
+                    <h2>Visual Architecture</h2>
+                    <div class="panel-actions">
+                        <button id="zoom-in" class="icon-button" aria-label="Zoom in">
+                            <span class="icon">🔍+</span>
+                        </button>
+                        <button id="zoom-out" class="icon-button" aria-label="Zoom out">
+                            <span class="icon">🔍-</span>
+                        </button>
+                        <button id="reset-diagram" class="icon-button" aria-label="Reset view">
+                            <span class="icon">🔄</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-content">
+                    <div id="diagram-container" class="diagram-container">
+                        <div class="diagram-placeholder">
+                            <div class="placeholder-icon">📊</div>
+                            <p>Your architecture diagram will appear here</p>
+                            <p class="placeholder-hint">Start chatting with Bob to build your configuration</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- YAML Panel -->
+            <section class="panel yaml-panel">
+                <div class="panel-header">
+                    <h2>Generated YAML</h2>
+                    <div class="panel-actions">
+                        <button id="copy-yaml" class="icon-button" aria-label="Copy YAML">
+                            <span class="icon">📋</span>
+                        </button>
+                        <button id="download-yaml" class="icon-button" aria-label="Download YAML">
+                            <span class="icon">💾</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-content">
+                    <div id="yaml-editor" class="yaml-editor">
+                        <div class="yaml-placeholder">
+                            <div class="placeholder-icon">📝</div>
+                            <p>Your YAML configuration will appear here</p>
+                            <p class="placeholder-hint">Bob will generate it as you chat</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Mobile Layout: Tabs -->
+        <div class="mobile-layout">
+            <div class="tabs">
+                <button class="tab active" data-tab="chat">
+                    <span class="icon">💬</span>
+                    Chat
+                </button>
+                <button class="tab" data-tab="diagram">
+                    <span class="icon">📊</span>
+                    Diagram
+                </button>
+                <button class="tab" data-tab="yaml">
+                    <span class="icon">📝</span>
+                    YAML
+                </button>
+            </div>
+            <div class="tab-content active" data-content="chat">
+                <!-- Chat content (same as desktop) -->
+            </div>
+            <div class="tab-content" data-content="diagram">
+                <!-- Diagram content (same as desktop) -->
+            </div>
+            <div class="tab-content" data-content="yaml">
+                <!-- YAML content (same as desktop) -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Modals -->
+
+    <!-- Help Modal -->
+    <div id="help-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>How to Use Bob YAML Wizard</h2>
+                <button class="modal-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h3>Getting Started</h3>
+                <p>Simply chat with Bob to build your CICS configuration. Bob understands natural language!</p>
+
+                <h3>Example Commands</h3>
+                <ul>
+                    <li><strong>"Create a CICS region"</strong> - Start a new configuration</li>
+                    <li><strong>"Add Java support"</strong> - Enable JVM</li>
+                    <li><strong>"Enable CMCI"</strong> - Add management interface</li>
+                    <li><strong>"Add database connection"</strong> - Configure DB2</li>
+                    <li><strong>"Optimize for production"</strong> - Apply best practices</li>
+                </ul>
+
+                <h3>Keyboard Shortcuts</h3>
+                <ul>
+                    <li><kbd>Enter</kbd> - Send message</li>
+                    <li><kbd>Ctrl+C</kbd> - Copy YAML</li>
+                    <li><kbd>Ctrl+D</kbd> - Download YAML</li>
+                    <li><kbd>Esc</kbd> - Close modals</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Share Modal -->
+    <div id="share-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Share Configuration</h2>
+                <button class="modal-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Share your configuration with others:</p>
+                <div class="share-options">
+                    <button id="copy-link" class="button button-primary">
+                        <span class="icon">🔗</span>
+                        Copy Link
+                    </button>
+                    <button id="generate-qr" class="button button-secondary">
+                        <span class="icon">📱</span>
+                        Generate QR Code
+                    </button>
+                </div>
+                <div id="qr-code" style="display: none; text-align: center; margin-top: 1rem;">
+                    <!-- QR code will be inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>
