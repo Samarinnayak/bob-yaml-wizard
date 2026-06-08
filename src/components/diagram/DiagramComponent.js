@@ -15,6 +15,7 @@ export class DiagramComponent {
 
     this.currentConfig = null;
     this.zoomLevel = 1;
+    this.onRegionClick = null; // Callback for region clicks
 
     // Initialize Mermaid
     mermaid.initialize({
@@ -56,6 +57,9 @@ export class DiagramComponent {
 
       // Apply zoom
       this.applyZoom();
+
+      // Add click handlers to region nodes
+      this.setupRegionClickHandlers();
 
       // Animate in
       this.animateIn();
@@ -286,6 +290,100 @@ graph TD
         <p class="placeholder-hint">Start chatting with Bob to build your configuration</p>
       </div>
     `;
+  }
+
+  /**
+   * Setup click handlers for region nodes
+   */
+  setupRegionClickHandlers() {
+    if (!this.currentConfig || !this.currentConfig.applid) return;
+
+    // Find the CICS region node in the SVG
+    const svg = this.container.querySelector('svg');
+    if (!svg) return;
+
+    // Find all nodes - Mermaid creates nodes with specific IDs
+    const nodes = svg.querySelectorAll('.node');
+    
+    nodes.forEach(node => {
+      const label = node.querySelector('.nodeLabel, text');
+      if (label && label.textContent.includes('CICS Region')) {
+        // Make it clickable
+        node.style.cursor = 'pointer';
+        
+        // Add click event
+        node.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.showRegionContextMenu(e, node);
+        });
+
+        // Add hover effect
+        node.addEventListener('mouseenter', () => {
+          node.style.filter = 'brightness(1.1) drop-shadow(0 0 8px rgba(15, 98, 254, 0.6))';
+        });
+
+        node.addEventListener('mouseleave', () => {
+          node.style.filter = '';
+        });
+      }
+    });
+  }
+
+  /**
+   * Show context menu for region
+   */
+  showRegionContextMenu(event, node) {
+    // Remove any existing context menu
+    const existingMenu = document.querySelector('.region-context-menu');
+    if (existingMenu) {
+      existingMenu.remove();
+    }
+
+    // Create context menu
+    const menu = document.createElement('div');
+    menu.className = 'region-context-menu';
+    menu.innerHTML = `
+      <div class="context-menu-item" data-action="duplicate">
+        <span class="icon">📋</span>
+        <span>Duplicate Region</span>
+      </div>
+    `;
+
+    // Position menu near the click
+    const rect = node.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.left = `${rect.right + 10}px`;
+    menu.style.top = `${rect.top}px`;
+    menu.style.zIndex = '10000';
+
+    document.body.appendChild(menu);
+
+    // Handle menu item clicks
+    menu.querySelector('[data-action="duplicate"]').addEventListener('click', () => {
+      menu.remove();
+      if (this.onRegionClick) {
+        this.onRegionClick('duplicate', this.currentConfig);
+      }
+    });
+
+    // Close menu when clicking outside
+    const closeMenu = (e) => {
+      if (!menu.contains(e.target)) {
+        menu.remove();
+        document.removeEventListener('click', closeMenu);
+      }
+    };
+
+    setTimeout(() => {
+      document.addEventListener('click', closeMenu);
+    }, 100);
+  }
+
+  /**
+   * Set callback for region click events
+   */
+  setRegionClickHandler(callback) {
+    this.onRegionClick = callback;
   }
 }
 
