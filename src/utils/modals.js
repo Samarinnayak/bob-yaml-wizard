@@ -206,4 +206,147 @@ export function showAlertDialog(title, message) {
   return modal;
 }
 
+export function showDuplicateRegionDialog(currentConfig, onConfirm, onCancel) {
+  const suggestedApplid = generateUniqueApplid(currentConfig.applid);
+  
+  const content = `
+    <p>Duplicate region <strong>${currentConfig.applid}</strong> with new properties:</p>
+    <form id="duplicate-region-form" style="margin-top: 1rem;">
+      <div style="margin-bottom: 1rem;">
+        <label for="new-applid" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+          APPLID (required) <span style="color: var(--error);">*</span>
+        </label>
+        <input
+          type="text"
+          id="new-applid"
+          name="applid"
+          value="${suggestedApplid}"
+          maxlength="8"
+          pattern="[A-Z0-9]{1,8}"
+          required
+          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-family: var(--font-mono);"
+        />
+        <small style="color: var(--text-secondary); display: block; margin-top: 0.25rem;">
+          1-8 alphanumeric characters
+        </small>
+      </div>
+
+      <div style="margin-bottom: 1rem;">
+        <label for="new-memory" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+          Memory
+        </label>
+        <input
+          type="text"
+          id="new-memory"
+          name="memory"
+          value="${currentConfig.memory || '512M'}"
+          pattern="\\d+[MG]"
+          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;"
+        />
+        <small style="color: var(--text-secondary); display: block; margin-top: 0.25rem;">
+          e.g., 512M or 2G
+        </small>
+      </div>
+
+      ${currentConfig.jvm && currentConfig.jvm.enabled ? `
+      <div style="margin-bottom: 1rem;">
+        <label for="new-jvm-heap" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+          JVM Heap Size
+        </label>
+        <input
+          type="text"
+          id="new-jvm-heap"
+          name="jvm_heap"
+          value="${currentConfig.jvm.heap_size || '512M'}"
+          pattern="\\d+[MG]"
+          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;"
+        />
+      </div>
+      ` : ''}
+
+      ${currentConfig.cmci && currentConfig.cmci.enabled ? `
+      <div style="margin-bottom: 1rem;">
+        <label for="new-cmci-port" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+          CMCI Port
+        </label>
+        <input
+          type="number"
+          id="new-cmci-port"
+          name="cmci_port"
+          value="${currentConfig.cmci.port || 1490}"
+          min="1024"
+          max="65535"
+          style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;"
+        />
+      </div>
+      ` : ''}
+    </form>
+  `;
+
+  const modal = createModal(
+    '📋 Duplicate Region',
+    content,
+    [
+      {
+        text: 'Cancel',
+        class: 'button-secondary',
+        onClick: () => {
+          if (onCancel) onCancel();
+        }
+      },
+      {
+        text: 'Create Duplicate',
+        class: 'button-primary',
+        onClick: () => {
+          const form = document.getElementById('duplicate-region-form');
+          if (form.checkValidity()) {
+            const formData = new FormData(form);
+            const newConfig = {
+              applid: formData.get('applid').toUpperCase(),
+              memory: formData.get('memory')
+            };
+
+            if (currentConfig.jvm && currentConfig.jvm.enabled) {
+              newConfig.jvm_heap = formData.get('jvm_heap');
+            }
+
+            if (currentConfig.cmci && currentConfig.cmci.enabled) {
+              newConfig.cmci_port = parseInt(formData.get('cmci_port'));
+            }
+
+            if (onConfirm) onConfirm(newConfig);
+          } else {
+            form.reportValidity();
+            return false; // Prevent modal from closing
+          }
+        }
+      }
+    ]
+  );
+
+  // Auto-uppercase APPLID input
+  const applidInput = modal.querySelector('#new-applid');
+  if (applidInput) {
+    applidInput.addEventListener('input', (e) => {
+      e.target.value = e.target.value.toUpperCase();
+    });
+  }
+
+  showModal(modal);
+  return modal;
+}
+
+function generateUniqueApplid(currentApplid) {
+  // Extract base name and number
+  const match = currentApplid.match(/^([A-Z]+)(\d*)$/);
+  if (match) {
+    const base = match[1];
+    const num = match[2] ? parseInt(match[2]) : 1;
+    const newNum = num + 1;
+    const newApplid = base + newNum;
+    return newApplid.substring(0, 8); // Ensure max 8 chars
+  }
+  return currentApplid + '2';
+}
+
 // Made with Bob

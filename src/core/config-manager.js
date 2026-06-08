@@ -370,6 +370,56 @@ export class ConfigurationManager {
       featureCount: features.length
     };
   }
+
+  /**
+   * Duplicate current region with new properties
+   */
+  duplicateRegion(newProperties) {
+    if (!this.config.applid) {
+      return {
+        success: false,
+        error: 'No region to duplicate'
+      };
+    }
+
+    // Validate new APPLID
+    if (!newProperties.applid || !/^[A-Z0-9]{1,8}$/.test(newProperties.applid)) {
+      return {
+        success: false,
+        error: 'Invalid APPLID. Must be 1-8 alphanumeric characters.'
+      };
+    }
+
+    // Create a deep copy of current config
+    const duplicatedConfig = JSON.parse(JSON.stringify(this.config));
+
+    // Update with new properties
+    duplicatedConfig.applid = newProperties.applid;
+    duplicatedConfig.region_hlq = `USER.${newProperties.applid}`;
+
+    if (newProperties.memory) {
+      duplicatedConfig.memory = newProperties.memory;
+    }
+
+    if (newProperties.jvm_heap && duplicatedConfig.jvm && duplicatedConfig.jvm.enabled) {
+      duplicatedConfig.jvm.heap_size = newProperties.jvm_heap;
+    }
+
+    if (newProperties.cmci_port && duplicatedConfig.cmci && duplicatedConfig.cmci.enabled) {
+      duplicatedConfig.cmci.port = newProperties.cmci_port;
+    }
+
+    // Save current state to history before replacing
+    this.saveToHistory();
+
+    // Replace current config with duplicated one
+    this.config = duplicatedConfig;
+
+    return {
+      success: true,
+      config: this.getConfig()
+    };
+  }
 }
 
 // Made with Bob

@@ -10,7 +10,7 @@ import { DiagramComponent } from './components/diagram/DiagramComponent.js';
 import { YAMLEditorComponent } from './components/editor/YAMLEditorComponent.js';
 import { BobBrain } from './core/bob-brain.js';
 import { ConfigurationManager } from './core/config-manager.js';
-import { setupModals } from './utils/modals.js';
+import { setupModals, showDuplicateRegionDialog } from './utils/modals.js';
 import { setupTheme } from './utils/theme.js';
 import { showToast } from './utils/toast.js';
 
@@ -46,6 +46,9 @@ class App {
 
       // Setup mobile tabs
       this.setupMobileTabs();
+
+      // Setup diagram region click handler
+      this.setupDiagramHandlers();
 
       console.log('✅ Application initialized successfully');
       showToast('Welcome to Bob YAML Wizard!', 'success');
@@ -182,6 +185,54 @@ class App {
         document.querySelector(`[data-content="${tabName}"]`)?.classList.add('active');
       });
     });
+  }
+
+  setupDiagramHandlers() {
+    // Handle region click events from diagram
+    this.diagram.setRegionClickHandler((action, config) => {
+      if (action === 'duplicate') {
+        this.handleDuplicateRegion(config);
+      }
+    });
+  }
+
+  async handleDuplicateRegion(currentConfig) {
+    showDuplicateRegionDialog(
+      currentConfig,
+      async (newProperties) => {
+        // Attempt to duplicate the region
+        const result = this.configManager.duplicateRegion(newProperties);
+
+        if (result.success) {
+          // Update diagram
+          await this.diagram.render(this.configManager.getConfig());
+
+          // Update YAML
+          const yaml = this.configManager.generateYAML();
+          this.yamlEditor.setContent(yaml);
+
+          // Add message to chat
+          this.chat.addMessage('bob',
+            `✅ Successfully duplicated region to **${newProperties.applid}**!\n\n` +
+            `The new region has been created with your specified properties. ` +
+            `You can continue to modify it or create another configuration.`,
+            { type: 'success' }
+          );
+
+          showToast(`Region duplicated as ${newProperties.applid}!`, 'success');
+        } else {
+          showToast(result.error || 'Failed to duplicate region', 'error');
+          this.chat.addMessage('bob',
+            `❌ Failed to duplicate region: ${result.error}`,
+            { type: 'error' }
+          );
+        }
+      },
+      () => {
+        // User cancelled
+        console.log('Duplicate region cancelled');
+      }
+    );
   }
 }
 
