@@ -383,8 +383,25 @@ graph TD
         // Make it clickable
         node.style.cursor = 'pointer';
         
-        // Add click event
+        // Add click event for left-click (select region)
         node.addEventListener('click', (e) => {
+          e.stopPropagation();
+          
+          // Only show context menu on right-click
+          if (e.button === 2 || e.ctrlKey) {
+            return; // Let contextmenu event handle it
+          }
+          
+          // Left-click: select region to show YAML
+          const applid = this.getRegionApplidFromNode(node);
+          if (applid && this.onRegionSelect) {
+            this.onRegionSelect(applid);
+          }
+        });
+        
+        // Add context menu event for right-click
+        node.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
           e.stopPropagation();
           this.showRegionContextMenu(e, node);
         });
@@ -449,6 +466,19 @@ graph TD
     setTimeout(() => {
       document.addEventListener('click', closeMenu);
     }, 100);
+  }
+
+  /**
+   * Extract APPLID from a region node
+   */
+  getRegionApplidFromNode(node) {
+    const label = node.querySelector('.nodeLabel, text');
+    if (!label) return null;
+    
+    const text = label.textContent;
+    // Extract APPLID from text like "CICS Region: CICSPROD"
+    const match = text.match(/CICS Region:\s*(\w+)/);
+    return match ? match[1] : null;
   }
 
   /**

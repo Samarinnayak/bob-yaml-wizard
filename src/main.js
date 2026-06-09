@@ -37,6 +37,11 @@ class App {
       this.diagram = new DiagramComponent('diagram-container');
       this.yamlEditor = new YAMLEditorComponent('yaml-editor');
 
+      // Set up YAML editor callback for region updates
+      this.yamlEditor.onRegionUpdate = (applid, updatedRegion) => {
+        return this.handleRegionUpdate(applid, updatedRegion);
+      };
+
       // Setup event listeners
       this.setupEventListeners();
 
@@ -63,9 +68,25 @@ class App {
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
 
+    console.log('🔍 Setting up event listeners...');
+    console.log('User input element:', userInput);
+    console.log('Send button element:', sendButton);
+
+    if (!userInput || !sendButton) {
+      console.error('❌ Chat elements not found!');
+      console.error('userInput:', userInput);
+      console.error('sendButton:', sendButton);
+      return;
+    }
+
     const sendMessage = async () => {
+      console.log('📤 Send message called');
       const message = userInput.value.trim();
-      if (!message) return;
+      console.log('Message:', message);
+      if (!message) {
+        console.log('⚠️ Empty message, returning');
+        return;
+      }
 
       // Clear input
       userInput.value = '';
@@ -115,12 +136,20 @@ class App {
       }
     };
 
-    sendButton.addEventListener('click', sendMessage);
+    sendButton.addEventListener('click', () => {
+      console.log('🖱️ Send button clicked!');
+      sendMessage();
+    });
+    
     userInput.addEventListener('keypress', (e) => {
+      console.log('⌨️ Key pressed:', e.key);
       if (e.key === 'Enter') {
+        console.log('↩️ Enter key detected, sending message');
         sendMessage();
       }
     });
+
+    console.log('✅ Event listeners attached successfully');
 
     // YAML actions
     document.getElementById('copy-yaml')?.addEventListener('click', async () => {
@@ -142,6 +171,15 @@ class App {
 
     window.addEventListener('yaml-downloaded', (e) => {
       showToast(`YAML for ${e.detail.applid} downloaded!`, 'success');
+    });
+
+    // Listen for region update events
+    window.addEventListener('region-updated', (e) => {
+      showToast(`Region ${e.detail.applid} updated successfully!`, 'success');
+    });
+
+    window.addEventListener('yaml-parse-error', (e) => {
+      showToast(`Error parsing YAML: ${e.detail.error}`, 'error');
     });
 
     // Diagram actions
@@ -230,10 +268,17 @@ class App {
 
   updateYAMLEditor(selectedApplid = null) {
     const allRegions = this.configManager.getAllRegions();
-    console.log('updateYAMLEditor - regions:', allRegions.map(r => r.applid));
-    console.log('updateYAMLEditor - selected:', selectedApplid);
+    console.log('📝 updateYAMLEditor called');
+    console.log('  - Number of regions:', allRegions.length);
+    console.log('  - Regions:', allRegions.map(r => r.applid));
+    console.log('  - Selected APPLID:', selectedApplid);
+    
+    if (allRegions.length === 0) {
+      console.log('  ⚠️ No regions to display');
+    }
     
     this.yamlEditor.setRegions(allRegions, selectedApplid);
+    console.log('  ✅ YAML editor updated');
   }
 
   async handleDuplicateRegion(currentConfig) {
@@ -286,6 +331,45 @@ class App {
       },
       existingRegions
     );
+  }
+
+  async handleRegionUpdate(applid, updatedRegion) {
+    console.log('handleRegionUpdate called for:', applid);
+    console.log('Updated region data:', updatedRegion);
+
+    try {
+      // Update the region in config manager
+      const success = this.configManager.updateRegion(applid, updatedRegion);
+
+      if (success) {
+        // Update diagram
+        const allRegions = this.configManager.getAllRegions();
+        await this.diagram.render(
+          this.configManager.getConfig(),
+          allRegions.length > 0 ? allRegions : null
+        );
+
+        // Update YAML editor
+        this.updateYAMLEditor();
+
+        // Add message to chat
+        this.chat.addMessage('bob',
+          `✅ Region **${applid}** has been updated with your changes.`,
+          { type: 'success' }
+        );
+
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Failed to update region:', error);
+      this.chat.addMessage('bob',
+        `❌ Failed to update region **${applid}**: ${error.message}`,
+        { type: 'error' }
+      );
+      return false;
+    }
   }
 }
 

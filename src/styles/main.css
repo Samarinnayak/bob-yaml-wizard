@@ -496,6 +496,7 @@ code {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   min-width: 32px;
   height: 32px;
 }
@@ -506,12 +507,47 @@ code {
   color: white;
 }
 
+.yaml-action-btn:hover .edit-label {
+  color: white;
+}
+
 .yaml-action-btn .icon {
   font-size: 1rem;
 }
 
+.yaml-edit-btn {
+  min-width: auto;
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: var(--primary-blue);
+  border-color: var(--primary-blue);
+  color: white;
+}
+
+.yaml-edit-btn .edit-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: white;
+}
+
+.yaml-edit-btn:hover {
+  background: var(--primary-blue-hover);
+  border-color: var(--primary-blue-hover);
+}
+
 .yaml-expand-btn {
   transition: transform 0.3s ease;
+  background: var(--primary-blue);
+  border-color: var(--primary-blue);
+  color: white;
+}
+
+.yaml-expand-btn:hover {
+  background: var(--primary-blue-hover);
+  border-color: var(--primary-blue-hover);
+}
+
+.yaml-expand-btn .icon {
+  filter: brightness(0) invert(1);
 }
 
 .yaml-accordion-item.expanded .yaml-expand-btn {
@@ -543,6 +579,27 @@ code {
 
 .yaml-code code {
   font-family: inherit;
+}
+
+.yaml-editor-textarea {
+  width: 100%;
+  min-height: 400px;
+  padding: var(--spacing-md);
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--background);
+  border: 2px solid var(--primary-blue);
+  border-radius: 4px;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.yaml-editor-textarea:focus {
+  border-color: var(--primary-blue);
+  box-shadow: 0 0 0 3px rgba(15, 98, 254, 0.1);
 }
 
 /* YAML Syntax Highlighting */

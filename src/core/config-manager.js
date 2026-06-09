@@ -541,6 +541,34 @@ export class ConfigurationManager {
     }
     return false;
   }
+
+  /**
+   * Update a region with new data
+   */
+  updateRegion(applid, updatedData) {
+    console.log('updateRegion called for:', applid);
+    console.log('Updated data:', updatedData);
+
+    // Find the region in the array
+    const index = this.regions.findIndex(r => r.applid === applid);
+    
+    if (index !== -1) {
+      // Update in regions array
+      this.regions[index] = { ...this.regions[index], ...updatedData };
+      console.log('Updated region in array at index:', index);
+    }
+
+    // If it's the current config, update that too
+    if (this.config.applid === applid) {
+      this.config = { ...this.config, ...updatedData };
+      console.log('Updated current config');
+    }
+
+    // Save to history
+    this.saveToHistory();
+
+    return true;
+  }
 }
 
 // Made with Bob

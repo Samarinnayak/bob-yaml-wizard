@@ -14,6 +14,8 @@ export class YAMLEditorComponent {
     this.regions = [];
     this.selectedApplid = null;
     this.expandedRegions = new Set();
+    this.editingRegions = new Set();
+    this.onRegionUpdate = null; // Callback for region updates
     this.initialize();
   }
 
@@ -35,20 +37,32 @@ export class YAMLEditorComponent {
    * Set regions to display
    */
   setRegions(regions, selectedApplid = null) {
+    console.log('📋 YAMLEditor.setRegions called');
+    console.log('  - Regions received:', regions?.length || 0);
+    console.log('  - Selected APPLID:', selectedApplid);
+    
     this.regions = regions || [];
     this.selectedApplid = selectedApplid;
+    
+    console.log('  - Calling render...');
     this.render();
+    console.log('  ✅ Render complete');
   }
 
   /**
    * Render the accordion
    */
   render() {
+    console.log('🎨 YAMLEditor.render called');
     const accordionContainer = this.container.querySelector('#yaml-accordion');
-    if (!accordionContainer) return;
+    if (!accordionContainer) {
+      console.error('❌ Accordion container not found!');
+      return;
+    }
 
     // Clear existing content
     accordionContainer.innerHTML = '';
+    console.log('  - Rendering', this.regions.length, 'regions');
 
     // Hide placeholder if exists
     const placeholder = this.container.querySelector('.yaml-placeholder');
@@ -58,6 +72,7 @@ export class YAMLEditorComponent {
 
     // If no regions, show placeholder
     if (this.regions.length === 0) {
+      console.log('  - No regions, showing placeholder');
       if (placeholder) {
         placeholder.style.display = 'flex';
       }
@@ -84,6 +99,9 @@ export class YAMLEditorComponent {
     item.className = 'yaml-accordion-item';
     item.dataset.applid = region.applid;
 
+    // Generate YAML for this region
+    const yaml = this.generateRegionYAML(region);
+
     // Header
     const header = document.createElement('div');
     header.className = 'yaml-accordion-header';
@@ -101,7 +119,14 @@ export class YAMLEditorComponent {
     
     const actions = document.createElement('div');
     actions.className = 'yaml-accordion-actions';
+    
+    const isEditingForButton = this.editingRegions.has(region.applid);
+    
     actions.innerHTML = `
+      <button class="yaml-action-btn yaml-edit-btn" data-action="edit" title="${isEditingForButton ? 'Update Region' : 'Edit YAML'}">
+        <span class="icon">${isEditingForButton ? '✓' : '✏️'}</span>
+        <span class="edit-label">${isEditingForButton ? 'Update' : 'Edit'}</span>
+      </button>
       <button class="yaml-action-btn" data-action="copy" title="Copy YAML">
         <span class="icon">📋</span>
       </button>
@@ -121,19 +146,32 @@ export class YAMLEditorComponent {
     const content = document.createElement('div');
     content.className = 'yaml-accordion-content';
     
-    const yamlCode = document.createElement('pre');
-    yamlCode.className = 'yaml-code';
+    const isEditingForContent = this.editingRegions.has(region.applid);
     
-    const codeElement = document.createElement('code');
-    codeElement.className = 'language-yaml';
-    
-    // Generate YAML for this region
-    const yaml = this.generateRegionYAML(region);
-    codeElement.textContent = yaml;
-    this.applySyntaxHighlighting(codeElement);
-    
-    yamlCode.appendChild(codeElement);
-    content.appendChild(yamlCode);
+    if (isEditingForContent) {
+      // Editable textarea
+      const yaml = this.generateRegionYAML(region);
+      const textarea = document.createElement('textarea');
+      textarea.className = 'yaml-editor-textarea';
+      textarea.value = yaml;
+      textarea.dataset.applid = region.applid;
+      content.appendChild(textarea);
+    } else {
+      // Read-only code display
+      const yamlCode = document.createElement('pre');
+      yamlCode.className = 'yaml-code';
+      
+      const codeElement = document.createElement('code');
+      codeElement.className = 'language-yaml';
+      
+      // Generate YAML for this region
+      const yaml = this.generateRegionYAML(region);
+      codeElement.textContent = yaml;
+      this.applySyntaxHighlighting(codeElement);
+      
+      yamlCode.appendChild(codeElement);
+      content.appendChild(yamlCode);
+    }
 
     // Assemble item
     item.appendChild(header);
@@ -142,8 +180,10 @@ export class YAMLEditorComponent {
     // Add event listeners
     this.attachEventListeners(item, region, yaml);
 
-    // Auto-expand if selected or if it's the only region
-    if (this.selectedApplid === region.applid || this.regions.length === 1) {
+    // Auto-expand if selected, if it's the only region, or if it's in expandedRegions set
+    if (this.selectedApplid === region.applid ||
+        this.regions.length === 1 ||
+        this.expandedRegions.has(region.applid)) {
       this.expandedRegions.add(region.applid);
       item.classList.add('expanded');
     }
@@ -246,6 +286,7 @@ export class YAMLEditorComponent {
   attachEventListeners(item, region, yaml) {
     const header = item.querySelector('.yaml-accordion-header-content');
     const toggleBtn = item.querySelector('[data-action="toggle"]');
+    const editBtn = item.querySelector('[data-action="edit"]');
     const copyBtn = item.querySelector('[data-action="copy"]');
     const downloadBtn = item.querySelector('[data-action="download"]');
 
@@ -265,6 +306,59 @@ export class YAMLEditorComponent {
 
     header.addEventListener('click', toggle);
     toggleBtn.addEventListener('click', toggle);
+
+    // Edit/Update YAML
+    editBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      
+      const isCurrentlyEditing = this.editingRegions.has(region.applid);
+      
+      if (isCurrentlyEditing) {
+        // Update mode - save changes
+        const textarea = item.querySelector('.yaml-editor-textarea');
+        if (textarea) {
+          const updatedYAML = textarea.value;
+          
+          try {
+            // Parse and validate YAML
+            const updatedRegion = this.parseYAMLToRegion(updatedYAML, region.applid);
+            
+            // Call update callback
+            if (this.onRegionUpdate) {
+              const success = await this.onRegionUpdate(region.applid, updatedRegion);
+              
+              if (success) {
+                this.editingRegions.delete(region.applid);
+                
+                // Re-render to show updated content
+                this.render();
+                
+                window.dispatchEvent(new CustomEvent('region-updated', {
+                  detail: { applid: region.applid }
+                }));
+              }
+            }
+          } catch (error) {
+            console.error('Failed to parse YAML:', error);
+            window.dispatchEvent(new CustomEvent('yaml-parse-error', {
+              detail: { applid: region.applid, error: error.message }
+            }));
+          }
+        }
+      } else {
+        // Edit mode - make editable
+        this.editingRegions.add(region.applid);
+        
+        // Expand if not already expanded
+        if (!item.classList.contains('expanded')) {
+          item.classList.add('expanded');
+          this.expandedRegions.add(region.applid);
+        }
+        
+        // Re-render to show textarea
+        this.render();
+      }
+    });
 
     // Copy YAML
     copyBtn.addEventListener('click', async (e) => {
@@ -301,6 +395,72 @@ export class YAMLEditorComponent {
         detail: { applid: region.applid } 
       }));
     });
+  }
+
+  /**
+   * Parse YAML string back to region object
+   */
+  parseYAMLToRegion(yamlString, applid) {
+    const lines = yamlString.split('\n');
+    const region = { applid };
+    
+    // Simple YAML parser for our specific structure
+    let currentSection = null;
+    let currentSubsection = null;
+    
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return;
+      
+      // Match key-value pairs
+      const match = trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*):(.*)$/);
+      if (!match) return;
+      
+      const key = match[1];
+      const value = match[2].trim();
+      
+      // Determine indentation level
+      const indent = line.search(/\S/);
+      
+      if (indent === 2) {
+        // Top level under cics_region
+        currentSection = key;
+        if (key === 'applid') region.applid = value;
+        else if (key === 'region_hlq') region.region_hlq = value;
+        else if (key === 'cics_hlq') region.cics_hlq = value;
+      } else if (indent === 4) {
+        // Second level
+        if (currentSection === 'region_jcl') {
+          currentSubsection = key;
+        } else if (currentSection === 'sit_parameters') {
+          if (!region.sit_parameters) region.sit_parameters = {};
+          region.sit_parameters[key] = value;
+        } else if (currentSection === 'jvm') {
+          if (!region.jvm) region.jvm = { enabled: true };
+          region.jvm[key] = value;
+        } else if (currentSection === 'datasets') {
+          currentSubsection = key;
+        }
+      } else if (indent === 6) {
+        // Third level
+        if (currentSection === 'region_jcl' && currentSubsection === 'job_parameters') {
+          if (key === 'region') region.memory = value;
+        } else if (currentSection === 'datasets' && currentSubsection) {
+          if (!region.datasets) region.datasets = {};
+          if (!region.datasets[currentSubsection]) region.datasets[currentSubsection] = {};
+          region.datasets[currentSubsection][key] = parseInt(value) || value;
+        }
+      }
+    });
+    
+    return region;
+  }
+
+  /**
+   * Set callback for region updates
+   */
+  setRegionUpdateHandler(callback) {
+    this.onRegionUpdate = callback;
   }
 
   /**
