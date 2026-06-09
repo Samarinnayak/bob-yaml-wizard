@@ -195,15 +195,18 @@ code {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-md);
+  padding: 0 var(--spacing-md);
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
+  height: 48px;
 }
 
 .panel-header h2 {
-  font-size: 1.125rem;
+  font-size: 1rem;
   margin: 0;
+  font-weight: 600;
+  line-height: 48px;
 }
 
 .panel-actions {
