@@ -411,36 +411,40 @@ export class ConfigurationManager {
     }
 
     // Debug: Log current state
+    console.log('=== DUPLICATE REGION DEBUG ===');
     console.log('Current regions:', this.regions.map(r => r.applid));
     console.log('Current config applid:', this.config.applid);
     console.log('New applid:', newProperties.applid);
 
-    // Check if APPLID already exists in regions array
-    const existsInRegions = this.regions.some(r => r.applid === newProperties.applid);
-    if (existsInRegions) {
-      console.log('APPLID exists in regions array');
+    // Get all existing APPLIDs (from regions array AND current config)
+    const allExistingApplids = new Set([
+      ...this.regions.map(r => r.applid),
+      this.config.applid
+    ]);
+
+    console.log('All existing APPLIDs:', Array.from(allExistingApplids));
+
+    // Check if new APPLID already exists anywhere
+    if (allExistingApplids.has(newProperties.applid)) {
+      console.log('APPLID already exists!');
       return {
         success: false,
-        error: `Region with APPLID ${newProperties.applid} already exists in regions`
+        error: `Region with APPLID ${newProperties.applid} already exists`
       };
     }
 
-    // Check if APPLID matches current config
-    if (this.config.applid === newProperties.applid) {
-      console.log('APPLID matches current config');
-      return {
-        success: false,
-        error: `Region with APPLID ${newProperties.applid} is the current region`
-      };
-    }
+    // Save current state to history BEFORE making changes
+    this.saveToHistory();
 
-    // Ensure current region is in the regions array
+    // Ensure current region is in the regions array before creating new one
     const currentRegionIndex = this.regions.findIndex(r => r.applid === this.config.applid);
     if (currentRegionIndex === -1) {
       // Current region not in array, add it
+      console.log('Adding current region to array:', this.config.applid);
       this.regions.push(JSON.parse(JSON.stringify(this.config)));
     } else {
       // Update the existing entry with current config state
+      console.log('Updating existing region in array:', this.config.applid);
       this.regions[currentRegionIndex] = JSON.parse(JSON.stringify(this.config));
     }
 
@@ -464,13 +468,15 @@ export class ConfigurationManager {
     }
 
     // Add duplicated config to regions array
+    console.log('Adding new region to array:', duplicatedConfig.applid);
     this.regions.push(duplicatedConfig);
 
-    // Save current state to history
-    this.saveToHistory();
-
-    // Keep the duplicated config as current
+    // Make the duplicated config the current one
     this.config = duplicatedConfig;
+
+    console.log('Final regions array:', this.regions.map(r => r.applid));
+    console.log('Final current config:', this.config.applid);
+    console.log('=== END DEBUG ===');
 
     return {
       success: true,

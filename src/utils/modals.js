@@ -140,9 +140,25 @@ export function createModal(title, content, actions = []) {
       button.textContent = action.text;
       button.onclick = () => {
         if (action.onClick) {
-          action.onClick();
+          const result = action.onClick();
+          if (result !== false) {
+            hideModal(modal);
+            // Remove modal from DOM after hiding
+            setTimeout(() => {
+              if (modal.parentNode) {
+                modal.parentNode.removeChild(modal);
+              }
+            }, 350);
+          }
+        } else {
+          hideModal(modal);
+          // Remove modal from DOM after hiding
+          setTimeout(() => {
+            if (modal.parentNode) {
+              modal.parentNode.removeChild(modal);
+            }
+          }, 350);
         }
-        hideModal(modal);
       };
       footer.appendChild(button);
     });
@@ -156,12 +172,24 @@ export function createModal(title, content, actions = []) {
   // Setup close handlers
   const closeButton = modal.querySelector('.modal-close');
   if (closeButton) {
-    closeButton.addEventListener('click', () => hideModal(modal));
+    closeButton.addEventListener('click', () => {
+      hideModal(modal);
+      setTimeout(() => {
+        if (modal.parentNode) {
+          modal.parentNode.removeChild(modal);
+        }
+      }, 350);
+    });
   }
 
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
       hideModal(modal);
+      setTimeout(() => {
+        if (modal.parentNode) {
+          modal.parentNode.removeChild(modal);
+        }
+      }, 350);
     }
   });
 
@@ -220,7 +248,7 @@ export function showDuplicateRegionDialog(currentConfig, onConfirm, onCancel, ex
           type="text"
           id="new-applid"
           name="applid"
-          value="${suggestedApplid}"
+          placeholder="${suggestedApplid}"
           maxlength="8"
           pattern="[A-Z0-9]{1,8}"
           required
@@ -299,23 +327,37 @@ export function showDuplicateRegionDialog(currentConfig, onConfirm, onCancel, ex
         class: 'button-primary',
         onClick: () => {
           const form = document.getElementById('duplicate-region-form');
-          if (form.checkValidity()) {
-            const formData = new FormData(form);
+          if (form && form.checkValidity()) {
+            // Get values directly from input elements to ensure we get current values
+            const applidInput = document.getElementById('new-applid');
+            const memoryInput = document.getElementById('new-memory');
+            const jvmHeapInput = document.getElementById('new-jvm-heap');
+            const cmciPortInput = document.getElementById('new-cmci-port');
+
+            console.log('=== FORM SUBMISSION DEBUG ===');
+            console.log('Input element:', applidInput);
+            console.log('Input element value property:', applidInput ? applidInput.value : 'null');
+            console.log('Input element getAttribute("value"):', applidInput ? applidInput.getAttribute('value') : 'null');
+            
             const newConfig = {
-              applid: formData.get('applid').toUpperCase(),
-              memory: formData.get('memory')
+              applid: applidInput ? applidInput.value.toUpperCase().trim() : '',
+              memory: memoryInput ? memoryInput.value.trim() : ''
             };
 
-            if (currentConfig.jvm && currentConfig.jvm.enabled) {
-              newConfig.jvm_heap = formData.get('jvm_heap');
+            console.log('Final APPLID being submitted:', newConfig.applid);
+            console.log('Final Memory being submitted:', newConfig.memory);
+            console.log('=== END FORM DEBUG ===');
+
+            if (jvmHeapInput && currentConfig.jvm && currentConfig.jvm.enabled) {
+              newConfig.jvm_heap = jvmHeapInput.value.trim();
             }
 
-            if (currentConfig.cmci && currentConfig.cmci.enabled) {
-              newConfig.cmci_port = parseInt(formData.get('cmci_port'));
+            if (cmciPortInput && currentConfig.cmci && currentConfig.cmci.enabled) {
+              newConfig.cmci_port = parseInt(cmciPortInput.value);
             }
 
             if (onConfirm) onConfirm(newConfig);
-          } else {
+          } else if (form) {
             form.reportValidity();
             return false; // Prevent modal from closing
           }
@@ -327,9 +369,32 @@ export function showDuplicateRegionDialog(currentConfig, onConfirm, onCancel, ex
   // Auto-uppercase APPLID input
   const applidInput = modal.querySelector('#new-applid');
   if (applidInput) {
+    console.log('=== MODAL SETUP DEBUG ===');
+    console.log('Suggested APPLID:', suggestedApplid);
+    console.log('Input initial value:', applidInput.value);
+    
+    // Set suggested value as default (user can change it)
+    if (!applidInput.value) {
+      applidInput.value = suggestedApplid;
+      console.log('Set input value to:', suggestedApplid);
+    }
+    
     applidInput.addEventListener('input', (e) => {
+      console.log('Input event - new value:', e.target.value);
+      const cursorPos = e.target.selectionStart;
       e.target.value = e.target.value.toUpperCase();
+      e.target.setSelectionRange(cursorPos, cursorPos);
     });
+    
+    // Focus and select the input for easy editing
+    setTimeout(() => {
+      console.log('Focusing input, current value:', applidInput.value);
+      applidInput.focus();
+      applidInput.select();
+      console.log('After select, value:', applidInput.value);
+    }, 100);
+    
+    console.log('=== END MODAL SETUP ===');
   }
 
   showModal(modal);

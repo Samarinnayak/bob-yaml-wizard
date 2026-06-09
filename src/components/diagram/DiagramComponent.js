@@ -457,6 +457,13 @@ graph TD
   setRegionClickHandler(callback) {
     this.onRegionClick = callback;
   }
+
+  /**
+   * Set callback for region selection events
+   */
+  setRegionSelectHandler(callback) {
+    this.onRegionSelect = callback;
+  }
 }
 
 // Made with Bob
