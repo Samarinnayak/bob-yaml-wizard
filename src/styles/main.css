@@ -74,11 +74,13 @@ html, body {
   background: var(--background);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
 }
 
 body {
   display: flex;
   flex-direction: column;
+  touch-action: pan-y;
 }
 
 /* ============================================
@@ -195,15 +197,18 @@ code {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-md);
+  padding: 0 var(--spacing-md);
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
+  height: 48px;
 }
 
 .panel-header h2 {
-  font-size: 1.125rem;
+  font-size: 1rem;
   margin: 0;
+  font-weight: 600;
+  line-height: 48px;
 }
 
 .panel-actions {
@@ -221,12 +226,25 @@ code {
    Chat Panel
    ============================================ */
 
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-panel .panel-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .chat-messages {
+  flex: 1;
   padding: var(--spacing-md);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
-  min-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .message {
@@ -310,6 +328,10 @@ code {
   padding: var(--spacing-md);
   border-top: 1px solid var(--border);
   background: var(--surface);
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
 }
 
 .typing-indicator {
@@ -366,6 +388,17 @@ code {
   align-items: center;
   justify-content: center;
   min-height: 100%;
+  overflow: hidden;
+  touch-action: none !important;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  position: relative;
+  cursor: grab;
+}
+
+.diagram-container:active {
+  cursor: grabbing;
 }
 
 .diagram-placeholder,
@@ -391,10 +424,231 @@ code {
 }
 
 /* ============================================
-   YAML Editor Panel
+   YAML Editor Panel - Accordion Structure
    ============================================ */
 
 .yaml-editor {
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.yaml-accordion-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.yaml-accordion-item {
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+  transition: all 0.3s ease;
+}
+
+.yaml-accordion-item:last-child {
+  border-bottom: none;
+}
+
+.yaml-accordion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md);
+  cursor: pointer;
+  background: var(--surface);
+  transition: background-color 0.2s ease;
+  gap: var(--spacing-md);
+}
+
+.yaml-accordion-header:hover {
+  background: var(--border);
+}
+
+.yaml-accordion-header-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.yaml-accordion-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.yaml-accordion-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.yaml-accordion-region-name {
+  font-size: 1rem;
+  font-family: var(--font-mono);
+}
+
+.yaml-accordion-region-info {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+  margin-left: var(--spacing-sm);
+}
+
+.yaml-accordion-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+.yaml-action-btn {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 32px;
+  height: 32px;
+}
+
+.yaml-action-btn:hover {
+  background: var(--primary-blue);
+  border-color: var(--primary-blue);
+  color: white;
+}
+
+.yaml-action-btn:hover .edit-label {
+  color: white;
+}
+
+.yaml-action-btn .icon {
+  font-size: 1rem;
+}
+
+.yaml-edit-btn {
+  min-width: auto;
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: var(--primary-blue);
+  border-color: var(--primary-blue);
+  color: white;
+}
+
+.yaml-edit-btn .edit-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: white;
+}
+
+.yaml-edit-btn:hover {
+  background: var(--primary-blue-hover);
+  border-color: var(--primary-blue-hover);
+}
+
+.yaml-expand-btn {
+  transition: transform 0.3s ease;
+  background: var(--primary-blue);
+  border-color: var(--primary-blue);
+  color: white;
+}
+
+.yaml-expand-btn:hover {
+  background: var(--primary-blue-hover);
+  border-color: var(--primary-blue-hover);
+}
+
+.yaml-expand-btn .icon {
+  filter: brightness(0) invert(1);
+}
+
+.yaml-accordion-item.expanded .yaml-expand-btn {
+  transform: rotate(180deg);
+}
+
+.yaml-accordion-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+  background: var(--background);
+}
+
+.yaml-accordion-item.expanded .yaml-accordion-content {
+  max-height: 2000px;
+  border-top: 1px solid var(--border);
+}
+
+.yaml-code {
+  margin: 0;
+  padding: var(--spacing-md);
+  background: var(--background);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.yaml-code code {
+  font-family: inherit;
+}
+
+.yaml-editor-textarea {
+  width: 100%;
+  min-height: 400px;
+  padding: var(--spacing-md);
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--background);
+  border: 2px solid var(--primary-blue);
+  border-radius: 4px;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.yaml-editor-textarea:focus {
+  border-color: var(--primary-blue);
+  box-shadow: 0 0 0 3px rgba(15, 98, 254, 0.1);
+}
+
+/* YAML Syntax Highlighting */
+.yaml-comment {
+  color: #6a737d;
+  font-style: italic;
+}
+
+.yaml-key {
+  color: var(--primary-blue);
+  font-weight: 600;
+}
+
+.yaml-string {
+  color: #24a148;
+}
+
+.yaml-number {
+  color: #8a3ffc;
+}
+
+.yaml-boolean {
+  color: #da1e28;
+  font-weight: 600;
+}
+
+.yaml-null {
+  color: #999;
+  font-style: italic;
+}
+
+/* Legacy YAML Editor Styles (for backward compatibility) */
+.yaml-editor-legacy {
   padding: var(--spacing-md);
   font-family: var(--font-mono);
   font-size: 0.875rem;
@@ -816,5 +1070,49 @@ code {
 .mb-1 { margin-bottom: var(--spacing-sm); }
 .mb-2 { margin-bottom: var(--spacing-md); }
 .mb-3 { margin-bottom: var(--spacing-lg); }
+
+/* ============================================
+   Region Context Menu
+   ============================================ */
+
+.region-context-menu {
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: var(--shadow-lg);
+  min-width: 200px;
+  padding: 0.5rem 0;
+  animation: contextMenuFadeIn 0.2s ease;
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.context-menu-item:hover {
+  background-color: var(--surface);
+}
+
+.context-menu-item .icon {
+  font-size: 1.25rem;
+}
+
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
 /* Made with Bob */

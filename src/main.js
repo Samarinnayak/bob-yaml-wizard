@@ -10,7 +10,7 @@ import { DiagramComponent } from './components/diagram/DiagramComponent.js';
 import { YAMLEditorComponent } from './components/editor/YAMLEditorComponent.js';
 import { BobBrain } from './core/bob-brain.js';
 import { ConfigurationManager } from './core/config-manager.js';
-import { setupModals } from './utils/modals.js';
+import { setupModals, showDuplicateRegionDialog } from './utils/modals.js';
 import { setupTheme } from './utils/theme.js';
 import { showToast } from './utils/toast.js';
 
@@ -37,6 +37,11 @@ class App {
       this.diagram = new DiagramComponent('diagram-container');
       this.yamlEditor = new YAMLEditorComponent('yaml-editor');
 
+      // Set up YAML editor callback for region updates
+      this.yamlEditor.onRegionUpdate = (applid, updatedRegion) => {
+        return this.handleRegionUpdate(applid, updatedRegion);
+      };
+
       // Setup event listeners
       this.setupEventListeners();
 
@@ -46,6 +51,9 @@ class App {
 
       // Setup mobile tabs
       this.setupMobileTabs();
+
+      // Setup diagram region click handler
+      this.setupDiagramHandlers();
 
       console.log('✅ Application initialized successfully');
       showToast('Welcome to Bob YAML Wizard!', 'success');
@@ -60,9 +68,25 @@ class App {
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
 
+    console.log('🔍 Setting up event listeners...');
+    console.log('User input element:', userInput);
+    console.log('Send button element:', sendButton);
+
+    if (!userInput || !sendButton) {
+      console.error('❌ Chat elements not found!');
+      console.error('userInput:', userInput);
+      console.error('sendButton:', sendButton);
+      return;
+    }
+
     const sendMessage = async () => {
+      console.log('📤 Send message called');
       const message = userInput.value.trim();
-      if (!message) return;
+      console.log('Message:', message);
+      if (!message) {
+        console.log('⚠️ Empty message, returning');
+        return;
+      }
 
       // Clear input
       userInput.value = '';
@@ -87,13 +111,16 @@ class App {
 
         // Update diagram if needed
         if (response.diagramChanges) {
-          await this.diagram.render(this.configManager.getConfig());
+          const allRegions = this.configManager.getAllRegions();
+          await this.diagram.render(
+            this.configManager.getConfig(),
+            allRegions.length > 0 ? allRegions : null
+          );
         }
 
         // Update YAML if needed
         if (response.configChanges) {
-          const yaml = this.configManager.generateYAML();
-          this.yamlEditor.setContent(yaml);
+          this.updateYAMLEditor();
         }
 
         // Show suggestions if any
@@ -109,22 +136,50 @@ class App {
       }
     };
 
-    sendButton.addEventListener('click', sendMessage);
+    sendButton.addEventListener('click', () => {
+      console.log('🖱️ Send button clicked!');
+      sendMessage();
+    });
+    
     userInput.addEventListener('keypress', (e) => {
+      console.log('⌨️ Key pressed:', e.key);
       if (e.key === 'Enter') {
+        console.log('↩️ Enter key detected, sending message');
         sendMessage();
       }
     });
 
+    console.log('✅ Event listeners attached successfully');
+
     // YAML actions
-    document.getElementById('copy-yaml')?.addEventListener('click', () => {
-      this.yamlEditor.copyToClipboard();
-      showToast('YAML copied to clipboard!', 'success');
+    document.getElementById('copy-yaml')?.addEventListener('click', async () => {
+      const success = await this.yamlEditor.copyToClipboard();
+      if (success) {
+        showToast('All YAML copied to clipboard!', 'success');
+      }
     });
 
     document.getElementById('download-yaml')?.addEventListener('click', () => {
-      this.yamlEditor.downloadFile('cics-region.yaml');
-      showToast('YAML downloaded!', 'success');
+      this.yamlEditor.downloadFile('cics-regions.yaml');
+      showToast('All YAML downloaded!', 'success');
+    });
+
+    // Listen for individual region copy/download events
+    window.addEventListener('yaml-copied', (e) => {
+      showToast(`YAML for ${e.detail.applid} copied!`, 'success');
+    });
+
+    window.addEventListener('yaml-downloaded', (e) => {
+      showToast(`YAML for ${e.detail.applid} downloaded!`, 'success');
+    });
+
+    // Listen for region update events
+    window.addEventListener('region-updated', (e) => {
+      showToast(`Region ${e.detail.applid} updated successfully!`, 'success');
+    });
+
+    window.addEventListener('yaml-parse-error', (e) => {
+      showToast(`Error parsing YAML: ${e.detail.error}`, 'error');
     });
 
     // Diagram actions
@@ -182,6 +237,139 @@ class App {
         document.querySelector(`[data-content="${tabName}"]`)?.classList.add('active');
       });
     });
+  }
+
+  setupDiagramHandlers() {
+    // Handle region context menu (right-click) events from diagram
+    this.diagram.setRegionClickHandler((action, config) => {
+      if (action === 'duplicate') {
+        this.handleDuplicateRegion(config);
+      }
+    });
+
+    // Handle region selection (left-click) events from diagram
+    this.diagram.setRegionSelectHandler((applid) => {
+      this.handleRegionSelection(applid);
+    });
+  }
+
+  handleRegionSelection(applid) {
+    console.log('handleRegionSelection called with applid:', applid);
+    
+    // Set selected region in config manager
+    this.configManager.setSelectedRegion(applid);
+    console.log('Selected region set to:', applid);
+
+    // Update YAML editor to show only selected region
+    this.updateYAMLEditor(applid);
+
+    showToast(`Viewing YAML for region ${applid}`, 'info');
+  }
+
+  updateYAMLEditor(selectedApplid = null) {
+    const allRegions = this.configManager.getAllRegions();
+    console.log('📝 updateYAMLEditor called');
+    console.log('  - Number of regions:', allRegions.length);
+    console.log('  - Regions:', allRegions.map(r => r.applid));
+    console.log('  - Selected APPLID:', selectedApplid);
+    
+    if (allRegions.length === 0) {
+      console.log('  ⚠️ No regions to display');
+    }
+    
+    this.yamlEditor.setRegions(allRegions, selectedApplid);
+    console.log('  ✅ YAML editor updated');
+  }
+
+  async handleDuplicateRegion(currentConfig) {
+    // Get all existing regions including the current one
+    const existingRegions = this.configManager.getAllRegions();
+    
+    // If regions array is empty, add current config
+    if (existingRegions.length === 0 && currentConfig.applid) {
+      existingRegions.push(currentConfig);
+    }
+    
+    showDuplicateRegionDialog(
+      currentConfig,
+      async (newProperties) => {
+        // Attempt to duplicate the region
+        const result = this.configManager.duplicateRegion(newProperties);
+
+        if (result.success) {
+          // Update diagram with all regions
+          const allRegions = this.configManager.getAllRegions();
+          await this.diagram.render(
+            this.configManager.getConfig(),
+            allRegions.length > 0 ? allRegions : null
+          );
+
+          // Update YAML editor
+          this.updateYAMLEditor();
+
+          // Add message to chat
+          const regionCount = allRegions.length;
+          this.chat.addMessage('bob',
+            `✅ Successfully duplicated region to **${newProperties.applid}**!\n\n` +
+            `You now have **${regionCount} region${regionCount > 1 ? 's' : ''}** configured. ` +
+            `All regions are visible in the diagram and YAML panel.`,
+            { type: 'success' }
+          );
+
+          showToast(`Region duplicated as ${newProperties.applid}!`, 'success');
+        } else {
+          showToast(result.error || 'Failed to duplicate region', 'error');
+          this.chat.addMessage('bob',
+            `❌ Failed to duplicate region: ${result.error}`,
+            { type: 'error' }
+          );
+        }
+      },
+      () => {
+        // User cancelled
+        console.log('Duplicate region cancelled');
+      },
+      existingRegions
+    );
+  }
+
+  async handleRegionUpdate(applid, updatedRegion) {
+    console.log('handleRegionUpdate called for:', applid);
+    console.log('Updated region data:', updatedRegion);
+
+    try {
+      // Update the region in config manager
+      const success = this.configManager.updateRegion(applid, updatedRegion);
+
+      if (success) {
+        // Update diagram
+        const allRegions = this.configManager.getAllRegions();
+        await this.diagram.render(
+          this.configManager.getConfig(),
+          allRegions.length > 0 ? allRegions : null
+        );
+
+        // Update YAML editor
+        this.updateYAMLEditor();
+
+        // Add message to chat
+        this.chat.addMessage('bob',
+          `✅ Region **${applid}** has been updated with your changes.`,
+          { type: 'success' }
+        );
+
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Failed to update region:', error);
+      this.chat.addMessage('bob',
+        `❌ Failed to update region **${applid}**: ${error.message}`,
+        { type: 'error' }
+      );
+      return false;
+    }
   }
 }
 

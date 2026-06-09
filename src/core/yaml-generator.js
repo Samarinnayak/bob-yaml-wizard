@@ -6,9 +6,22 @@
 
 export class YAMLGenerator {
   /**
-   * Generate YAML from configuration object
+   * Generate YAML from configuration object or array of regions
    */
-  static generate(config) {
+  static generate(config, allRegions = null, selectedApplid = null) {
+    // If a specific region is selected, show only that region
+    if (selectedApplid && allRegions && allRegions.length > 0) {
+      const selectedRegion = allRegions.find(r => r.applid === selectedApplid);
+      if (selectedRegion) {
+        return this.generateSingleRegion(selectedRegion);
+      }
+    }
+
+    // If allRegions is provided and has multiple regions, generate collapsible multi-region YAML
+    if (allRegions && allRegions.length > 1) {
+      return this.generateCollapsibleMultiRegion(allRegions);
+    }
+
     if (!config.applid) {
       return this.generateEmpty();
     }
@@ -23,104 +36,122 @@ export class YAMLGenerator {
     // Main cics_region block
     sections.push('cics_region:');
 
-    // Basic configuration
+    // SYSID (optional but recommended)
+    if (config.sysid) {
+      sections.push(`  sysid: ${config.sysid}`);
+    }
+
+    // APPLID (required)
     sections.push(`  applid: ${config.applid}`);
+
+    // Installation data sets
     sections.push('  installation:');
     sections.push('    data_sets:');
     sections.push('      cics:');
-    sections.push(`        hlq: ${config.cics_hlq || 'CICS.TS61'}`);
-    sections.push(`  region_hlq: ${config.region_hlq || `USER.${config.applid}`}`);
-    sections.push('');
+    sections.push(`        hlq: ${config.cics_hlq || 'CICSTS63.CICS'}`);
 
-    // Region JCL
-    sections.push('  region_jcl:');
-    sections.push('    job_parameters:');
-    sections.push(`      region: ${config.memory || '512M'}`);
+    // Region HLQ
+    sections.push(`  region_hlq: ${config.region_hlq || `REGION.${config.applid}`}`);
     sections.push('');
 
     // SIT Parameters
     sections.push('  sit_parameters:');
-    sections.push(`    start: ${config.sit_parameters?.start || 'AUTO'}`);
+    sections.push(`    start: ${config.sit_parameters?.start || 'INITIAL'}`);
     sections.push(`    cicssvc: ${config.sit_parameters?.cicssvc || 217}`);
-    sections.push(`    grplist: ${config.sit_parameters?.grplist || '(DFHLIST)'}`);
-
-    if (config.sit_parameters?.mnfreq) {
-      sections.push(`    mnfreq: ${config.sit_parameters.mnfreq}`);
+    if (config.sit_parameters?.gmtext) {
+      sections.push(`    gmtext: ${config.sit_parameters.gmtext}`);
     }
-
-    if (config.sit_parameters?.srbsvc) {
-      sections.push(`    srbsvc: ${config.sit_parameters.srbsvc}`);
+    if (config.sit_parameters?.usshome) {
+      sections.push(`    usshome: ${config.sit_parameters.usshome}`);
     }
-
     sections.push('');
 
-    // JVM Configuration
-    if (config.jvm && config.jvm.enabled) {
-      sections.push('  # Java Virtual Machine Configuration');
-      sections.push('  jvm:');
-      sections.push(`    heap_size: ${config.jvm.heap_size || '512M'}`);
-      if (config.jvm.profile) {
-        sections.push(`    profile: ${config.jvm.profile}`);
-      }
-      sections.push('');
-    }
-
     // Extensions (CMCI, etc.)
-    const extensions = [];
-
-    if (config.cmci && config.cmci.enabled) {
-      extensions.push({
-        name: 'cics_cmci',
-        config: {
-          port: config.cmci.port || 1490
-        }
-      });
-    }
-
-    if (extensions.length > 0) {
+    if (config.extensions) {
       sections.push('  # Extensions');
       sections.push('  extensions:');
-      extensions.forEach(ext => {
-        sections.push(`    - ${ext.name}:`);
-        Object.entries(ext.config).forEach(([key, value]) => {
-          sections.push(`        ${key}: ${value}`);
-        });
+      
+      if (config.extensions.cics_cmci) {
+        sections.push('    cics_cmci:');
+        sections.push(`      provider: ${config.extensions.cics_cmci.provider || 'JVMSERVER'}`);
+        sections.push(`      port: ${config.extensions.cics_cmci.port || 1490}`);
+      }
+      
+      sections.push('');
+    }
+
+    // JVM Profiles (optional)
+    if (config.jvm_profiles && config.jvm_profiles.length > 0) {
+      sections.push('  # JVM Configuration');
+      sections.push('  jvm_profiles:');
+      config.jvm_profiles.forEach(profile => {
+        sections.push(`    - "${profile}"`);
       });
       sections.push('');
     }
 
-    // Database Configuration (as comment for now)
-    if (config.database && config.database.enabled) {
-      sections.push('  # Database Configuration');
-      sections.push(`  # Type: ${config.database.type || 'db2'}`);
-      sections.push(`  # Connection Pool: ${config.database.connection_pool || 10}`);
-      sections.push('  # Note: Database configuration requires additional setup');
-      sections.push('');
-    }
-
-    // Datasets Configuration
+    // All 8 datasets with defaults from schema
     sections.push('  # Dataset Configuration');
-    sections.push('  datasets:');
+    
+    // CSD - Component System Definition
+    sections.push('  csd:');
+    sections.push(`    primary_space: ${config.datasets?.csd?.primary_space || 4}`);
+    sections.push(`    secondary_space: ${config.datasets?.csd?.secondary_space || 1}`);
+    sections.push(`    unit: ${config.datasets?.csd?.unit || 'MB'}`);
+    sections.push('');
 
-    if (config.datasets?.csd) {
-      sections.push('    csd:');
-      sections.push(`      primary: ${config.datasets.csd.primary || 10}`);
-      sections.push(`      secondary: ${config.datasets.csd.secondary || 5}`);
-    }
+    // Global Catalog
+    sections.push('  global_catalog:');
+    sections.push(`    primary_space: ${config.datasets?.global_catalog?.primary_space || 5}`);
+    sections.push(`    secondary_space: ${config.datasets?.global_catalog?.secondary_space || 1}`);
+    sections.push(`    unit: ${config.datasets?.global_catalog?.unit || 'MB'}`);
+    sections.push('');
 
-    if (config.datasets?.gcd) {
-      sections.push('    gcd:');
-      sections.push(`      primary: ${config.datasets.gcd.primary || 5}`);
-      sections.push(`      secondary: ${config.datasets.gcd.secondary || 2}`);
-    }
+    // Local Catalog
+    sections.push('  local_catalog:');
+    sections.push(`    primary_space: ${config.datasets?.local_catalog?.primary_space || 200}`);
+    sections.push(`    secondary_space: ${config.datasets?.local_catalog?.secondary_space || 5}`);
+    sections.push(`    unit: ${config.datasets?.local_catalog?.unit || 'records'}`);
+    sections.push('');
 
-    if (config.datasets?.lcd) {
-      sections.push('    lcd:');
-      sections.push(`      primary: ${config.datasets.lcd.primary || 5}`);
-      sections.push(`      secondary: ${config.datasets.lcd.secondary || 2}`);
-    }
+    // Auxiliary Temp Storage
+    sections.push('  aux_temp_storage:');
+    sections.push(`    primary_space: ${config.datasets?.aux_temp_storage?.primary_space || 200}`);
+    sections.push(`    secondary_space: ${config.datasets?.aux_temp_storage?.secondary_space || 10}`);
+    sections.push(`    unit: ${config.datasets?.aux_temp_storage?.unit || 'records'}`);
+    sections.push('');
+
+    // Auxiliary Trace
+    sections.push('  aux_trace:');
+    sections.push(`    enabled: ${config.datasets?.aux_trace?.enabled !== undefined ? config.datasets.aux_trace.enabled : false}`);
+    sections.push('');
+
+    // Local Request Queue
+    sections.push('  local_request_queue:');
+    sections.push(`    primary_space: ${config.datasets?.local_request_queue?.primary_space || 200}`);
+    sections.push(`    secondary_space: ${config.datasets?.local_request_queue?.secondary_space || 5}`);
+    sections.push(`    unit: ${config.datasets?.local_request_queue?.unit || 'records'}`);
+    sections.push('');
+
+    // Transaction Dump
+    sections.push('  transaction_dump:');
+    sections.push(`    enabled: ${config.datasets?.transaction_dump?.enabled !== undefined ? config.datasets.transaction_dump.enabled : true}`);
+    sections.push('');
+
+    // TD Intrapartition
+    sections.push('  td_intrapartition:');
+    sections.push(`    primary_space: ${config.datasets?.td_intrapartition?.primary_space || 100}`);
+    sections.push(`    secondary_space: ${config.datasets?.td_intrapartition?.secondary_space || 10}`);
+    sections.push(`    unit: ${config.datasets?.td_intrapartition?.unit || 'records'}`);
 
     return sections.join('\n');
+  }
+
+  /**
+   * Generate YAML for a single region (used when region is selected)
+   */
+  static generateSingleRegion(config) {
+    return this.generate(config, null, null);
   }
 
   /**
@@ -131,21 +162,56 @@ export class YAMLGenerator {
 # Start chatting with Bob to build your configuration!
 
 cics_region:
+  sysid: SYS1
   applid: YOUR_REGION_NAME
   installation:
     data_sets:
       cics:
-        hlq: CICS.TS61
-  region_hlq: USER.YOUR_REGION_NAME
-
-  region_jcl:
-    job_parameters:
-      region: 512M
+        hlq: CICSTS63.CICS
+  region_hlq: REGION.YOUR_REGION_NAME
 
   sit_parameters:
-    start: AUTO
+    start: INITIAL
     cicssvc: 217
-    grplist: (DFHLIST)
+    gmtext: Region provisioned with zconfig
+    usshome: /uss/home
+
+  # Dataset Configuration
+  csd:
+    primary_space: 4
+    secondary_space: 1
+    unit: MB
+
+  global_catalog:
+    primary_space: 5
+    secondary_space: 1
+    unit: MB
+
+  local_catalog:
+    primary_space: 200
+    secondary_space: 5
+    unit: records
+
+  aux_temp_storage:
+    primary_space: 200
+    secondary_space: 10
+    unit: records
+
+  aux_trace:
+    enabled: false
+
+  local_request_queue:
+    primary_space: 200
+    secondary_space: 5
+    unit: records
+
+  transaction_dump:
+    enabled: true
+
+  td_intrapartition:
+    primary_space: 100
+    secondary_space: 10
+    unit: records
 `;
   }
 
@@ -349,6 +415,142 @@ cics_region:
       emptyLines: lines.length - nonEmptyLines.length,
       characters: yaml.length
     };
+  }
+
+  /**
+   * Generate YAML for multiple regions (legacy - full format)
+   */
+  static generateMultiRegion(regions) {
+    const sections = [];
+
+    // Header comment
+    sections.push('# CICS Multi-Region Configuration');
+    sections.push(`# Generated by Bob YAML Wizard on ${new Date().toISOString()}`);
+    sections.push(`# Total Regions: ${regions.length}`);
+    sections.push('');
+
+    sections.push('# Multiple CICS Regions');
+    sections.push('cics_regions:');
+
+    regions.forEach((config, index) => {
+      if (index > 0) {
+        sections.push('');
+      }
+
+      sections.push(`  # Region ${index + 1}: ${config.applid}`);
+      sections.push(`  - applid: ${config.applid}`);
+      sections.push('    installation:');
+      sections.push('      data_sets:');
+      sections.push('        cics:');
+      sections.push(`          hlq: ${config.cics_hlq || 'CICS.TS61'}`);
+      sections.push(`    region_hlq: ${config.region_hlq || `USER.${config.applid}`}`);
+
+      // Region JCL
+      sections.push('    region_jcl:');
+      sections.push('      job_parameters:');
+      sections.push(`        region: ${config.memory || '512M'}`);
+
+      // SIT Parameters
+      sections.push('    sit_parameters:');
+      sections.push(`      start: ${config.sit_parameters?.start || 'AUTO'}`);
+      sections.push(`      cicssvc: ${config.sit_parameters?.cicssvc || 217}`);
+      sections.push(`      grplist: ${config.sit_parameters?.grplist || '(DFHLIST)'}`);
+
+      if (config.sit_parameters?.mnfreq) {
+        sections.push(`      mnfreq: ${config.sit_parameters.mnfreq}`);
+      }
+
+      // JVM Configuration
+      if (config.jvm && config.jvm.enabled) {
+        sections.push('    jvm:');
+        sections.push(`      heap_size: ${config.jvm.heap_size || '512M'}`);
+        if (config.jvm.profile) {
+          sections.push(`      profile: ${config.jvm.profile}`);
+        }
+      }
+
+      // Extensions
+      const extensions = [];
+      if (config.cmci && config.cmci.enabled) {
+        extensions.push({
+          name: 'cics_cmci',
+          config: { port: config.cmci.port || 1490 }
+        });
+      }
+
+      if (extensions.length > 0) {
+        sections.push('    extensions:');
+        extensions.forEach(ext => {
+          sections.push(`      - ${ext.name}:`);
+          Object.entries(ext.config).forEach(([key, value]) => {
+            sections.push(`          ${key}: ${value}`);
+          });
+        });
+      }
+
+      // Datasets
+      sections.push('    datasets:');
+      if (config.datasets?.csd) {
+        sections.push('      csd:');
+        sections.push(`        primary: ${config.datasets.csd.primary || 10}`);
+        sections.push(`        secondary: ${config.datasets.csd.secondary || 5}`);
+      }
+      if (config.datasets?.gcd) {
+        sections.push('      gcd:');
+        sections.push(`        primary: ${config.datasets.gcd.primary || 5}`);
+        sections.push(`        secondary: ${config.datasets.gcd.secondary || 2}`);
+      }
+    });
+
+    return sections.join('\n');
+  }
+
+  /**
+   * Generate collapsible YAML for multiple regions
+   * Shows region names with collapsed content
+   */
+  static generateCollapsibleMultiRegion(regions) {
+    const sections = [];
+
+    // Header comment
+    sections.push('# CICS Multi-Region Configuration');
+    sections.push(`# Generated by Bob YAML Wizard on ${new Date().toISOString()}`);
+    sections.push(`# Total Regions: ${regions.length}`);
+    sections.push('# Click on a region in the diagram to view its full configuration');
+    sections.push('');
+
+    sections.push('cics_regions:');
+
+    regions.forEach((config, index) => {
+      if (index > 0) {
+        sections.push('');
+      }
+
+      // Collapsed region header
+      sections.push(`  # ========================================`);
+      sections.push(`  # Region ${index + 1}: ${config.applid}`);
+      sections.push(`  # Memory: ${config.memory || '512M'}`);
+      
+      if (config.jvm && config.jvm.enabled) {
+        sections.push(`  # JVM: ${config.jvm.heap_size || '512M'} heap`);
+      }
+      
+      if (config.cmci && config.cmci.enabled) {
+        sections.push(`  # CMCI: Port ${config.cmci.port || 1490}`);
+      }
+      
+      sections.push(`  # ========================================`);
+      sections.push(`  # Click "${config.applid}" in the diagram to view full configuration`);
+      sections.push('');
+      
+      // Minimal collapsed view
+      sections.push(`  - applid: ${config.applid}`);
+      sections.push(`    region_hlq: ${config.region_hlq || `USER.${config.applid}`}`);
+      sections.push(`    memory: ${config.memory || '512M'}`);
+      sections.push(`    # ... (click region to expand)`);
+    });
+
+    return sections.join('\n');
   }
 }
 

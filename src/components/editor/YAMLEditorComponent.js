@@ -1,7 +1,7 @@
 /**
- * YAML Editor Component
+ * YAML Editor Component - Accordion-based multi-region viewer
  *
- * Handles YAML display and editing with syntax highlighting
+ * Displays YAML configurations in an accordion structure
  */
 
 export class YAMLEditorComponent {
@@ -11,8 +11,11 @@ export class YAMLEditorComponent {
       throw new Error(`Container with id "${containerId}" not found`);
     }
 
-    this.content = '';
-    this.editorElement = null;
+    this.regions = [];
+    this.selectedApplid = null;
+    this.expandedRegions = new Set();
+    this.editingRegions = new Set();
+    this.onRegionUpdate = null; // Callback for region updates
     this.initialize();
   }
 
@@ -20,49 +23,291 @@ export class YAMLEditorComponent {
    * Initialize the editor
    */
   initialize() {
-    // Clear placeholder if exists
-    const placeholder = this.container.querySelector('.yaml-placeholder');
-    if (placeholder) {
-      placeholder.style.display = 'none';
-    }
-
-    // Create editor element
-    this.editorElement = document.createElement('pre');
-    this.editorElement.className = 'yaml-content';
-
-    const codeElement = document.createElement('code');
-    codeElement.className = 'language-yaml';
-
-    this.editorElement.appendChild(codeElement);
-    this.container.appendChild(this.editorElement);
+    // Clear any existing content
+    this.container.innerHTML = '';
+    
+    // Create accordion container
+    const accordionContainer = document.createElement('div');
+    accordionContainer.className = 'yaml-accordion-container';
+    accordionContainer.id = 'yaml-accordion';
+    this.container.appendChild(accordionContainer);
   }
 
   /**
-   * Set YAML content
+   * Set regions to display
    */
-  setContent(yamlString) {
-    this.content = yamlString;
+  setRegions(regions, selectedApplid = null) {
+    console.log('📋 YAMLEditor.setRegions called');
+    console.log('  - Regions received:', regions?.length || 0);
+    console.log('  - Selected APPLID:', selectedApplid);
+    
+    this.regions = regions || [];
+    this.selectedApplid = selectedApplid;
+    
+    console.log('  - Calling render...');
+    this.render();
+    console.log('  ✅ Render complete');
+  }
 
-    // Hide placeholder
+  /**
+   * Render the accordion
+   */
+  render() {
+    console.log('🎨 YAMLEditor.render called');
+    const accordionContainer = this.container.querySelector('#yaml-accordion');
+    if (!accordionContainer) {
+      console.error('❌ Accordion container not found!');
+      return;
+    }
+
+    // Clear existing content
+    accordionContainer.innerHTML = '';
+    console.log('  - Rendering', this.regions.length, 'regions');
+
+    // Hide placeholder if exists
     const placeholder = this.container.querySelector('.yaml-placeholder');
     if (placeholder) {
       placeholder.style.display = 'none';
     }
 
-    // Update editor
-    const codeElement = this.editorElement.querySelector('code');
-    if (codeElement) {
-      codeElement.textContent = yamlString;
+    // If no regions, show placeholder
+    if (this.regions.length === 0) {
+      console.log('  - No regions, showing placeholder');
+      if (placeholder) {
+        placeholder.style.display = 'flex';
+      }
+      return;
+    }
+
+    // Filter regions based on selection
+    const regionsToShow = this.selectedApplid
+      ? this.regions.filter(r => r.applid === this.selectedApplid)
+      : this.regions;
+
+    // Create accordion items
+    regionsToShow.forEach((region, index) => {
+      const accordionItem = this.createAccordionItem(region, index);
+      accordionContainer.appendChild(accordionItem);
+    });
+  }
+
+  /**
+   * Create an accordion item for a region
+   */
+  createAccordionItem(region, index) {
+    const item = document.createElement('div');
+    item.className = 'yaml-accordion-item';
+    item.dataset.applid = region.applid;
+
+    // Generate YAML for this region
+    const yaml = this.generateRegionYAML(region);
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'yaml-accordion-header';
+    
+    const headerContent = document.createElement('div');
+    headerContent.className = 'yaml-accordion-header-content';
+    
+    const title = document.createElement('div');
+    title.className = 'yaml-accordion-title';
+    title.innerHTML = `
+      <span class="yaml-accordion-icon">📄</span>
+      <span class="yaml-accordion-region-name">${region.applid}</span>
+      <span class="yaml-accordion-region-info">${region.memory || '512M'} • ${this.getRegionFeatures(region)}</span>
+    `;
+    
+    const actions = document.createElement('div');
+    actions.className = 'yaml-accordion-actions';
+    
+    const isEditingForButton = this.editingRegions.has(region.applid);
+    
+    actions.innerHTML = `
+      <button class="yaml-action-btn yaml-edit-btn" data-action="edit" title="${isEditingForButton ? 'Update Region' : 'Edit YAML'}">
+        <span class="icon">${isEditingForButton ? '✓' : '✏️'}</span>
+        <span class="edit-label">${isEditingForButton ? 'Update' : 'Edit'}</span>
+      </button>
+      <button class="yaml-action-btn" data-action="copy" title="Copy YAML">
+        <span class="icon">📋</span>
+      </button>
+      <button class="yaml-action-btn" data-action="download" title="Download YAML">
+        <span class="icon">💾</span>
+      </button>
+      <button class="yaml-action-btn yaml-expand-btn" data-action="toggle" title="Expand/Collapse">
+        <span class="icon">▼</span>
+      </button>
+    `;
+    
+    headerContent.appendChild(title);
+    header.appendChild(headerContent);
+    header.appendChild(actions);
+
+    // Content
+    const content = document.createElement('div');
+    content.className = 'yaml-accordion-content';
+    
+    const isEditingForContent = this.editingRegions.has(region.applid);
+    
+    if (isEditingForContent) {
+      // Editable textarea
+      const yaml = this.generateRegionYAML(region);
+      const textarea = document.createElement('textarea');
+      textarea.className = 'yaml-editor-textarea';
+      textarea.value = yaml;
+      textarea.dataset.applid = region.applid;
+      content.appendChild(textarea);
+    } else {
+      // Read-only code display
+      const yamlCode = document.createElement('pre');
+      yamlCode.className = 'yaml-code';
+      
+      const codeElement = document.createElement('code');
+      codeElement.className = 'language-yaml';
+      
+      // Generate YAML for this region
+      const yaml = this.generateRegionYAML(region);
+      codeElement.textContent = yaml;
       this.applySyntaxHighlighting(codeElement);
-      this.animateUpdate();
+      
+      yamlCode.appendChild(codeElement);
+      content.appendChild(yamlCode);
     }
+
+    // Assemble item
+    item.appendChild(header);
+    item.appendChild(content);
+
+    // Add event listeners
+    this.attachEventListeners(item, region, yaml);
+
+    // Auto-expand if selected, if it's the only region, or if it's in expandedRegions set
+    if (this.selectedApplid === region.applid ||
+        this.regions.length === 1 ||
+        this.expandedRegions.has(region.applid)) {
+      this.expandedRegions.add(region.applid);
+      item.classList.add('expanded');
+    }
+
+    return item;
   }
 
   /**
-   * Get YAML content
+   * Get region features summary
    */
-  getContent() {
-    return this.content;
+  getRegionFeatures(region) {
+    const features = [];
+    if (region.sysid) features.push(`SYSID: ${region.sysid}`);
+    if (region.jvm_profiles && region.jvm_profiles.length > 0) {
+      const profileNames = region.jvm_profiles.map(p => p.replace('.jvmprofile', '')).join(', ');
+      features.push(`JVM: ${profileNames}`);
+    }
+    return features.length > 0 ? features.join(', ') : 'Basic';
+  }
+
+  /**
+   * Generate YAML for a single region
+   */
+  generateRegionYAML(region) {
+    const lines = [];
+    
+    lines.push(`# CICS Region: ${region.applid}`);
+    lines.push(`# Generated: ${new Date().toISOString()}`);
+    lines.push('');
+    lines.push('cics_region:');
+    
+    if (region.sysid) {
+      lines.push(`  sysid: ${region.sysid}`);
+    }
+    
+    lines.push(`  applid: ${region.applid}`);
+    lines.push('  installation:');
+    lines.push('    data_sets:');
+    lines.push('      cics:');
+    lines.push(`        hlq: ${region.cics_hlq || 'CICSTS63.CICS'}`);
+    lines.push(`  region_hlq: ${region.region_hlq || `REGION.${region.applid}`}`);
+    lines.push('');
+    lines.push('  sit_parameters:');
+    lines.push(`    start: ${region.sit_parameters?.start || 'INITIAL'}`);
+    lines.push(`    cicssvc: ${region.sit_parameters?.cicssvc || 217}`);
+    if (region.sit_parameters?.gmtext) {
+      lines.push(`    gmtext: ${region.sit_parameters.gmtext}`);
+    }
+    if (region.sit_parameters?.usshome) {
+      lines.push(`    usshome: ${region.sit_parameters.usshome}`);
+    }
+    lines.push('');
+
+    // Extensions (CMCI, etc.)
+    if (region.extensions) {
+      lines.push('  # Extensions');
+      lines.push('  extensions:');
+      
+      if (region.extensions.cics_cmci) {
+        lines.push('    cics_cmci:');
+        lines.push(`      provider: ${region.extensions.cics_cmci.provider || 'JVMSERVER'}`);
+        lines.push(`      port: ${region.extensions.cics_cmci.port || 1490}`);
+      }
+      
+      lines.push('');
+    }
+
+    // JVM Profiles (optional)
+    if (region.jvm_profiles && region.jvm_profiles.length > 0) {
+      lines.push('  # JVM Configuration');
+      lines.push('  jvm_profiles:');
+      region.jvm_profiles.forEach(profile => {
+        lines.push(`    - "${profile}"`);
+      });
+      lines.push('');
+    }
+
+    // All 8 datasets
+    lines.push('  # Dataset Configuration');
+    
+    lines.push('  csd:');
+    lines.push(`    primary_space: ${region.datasets?.csd?.primary_space || 4}`);
+    lines.push(`    secondary_space: ${region.datasets?.csd?.secondary_space || 1}`);
+    lines.push(`    unit: ${region.datasets?.csd?.unit || 'MB'}`);
+    lines.push('');
+
+    lines.push('  global_catalog:');
+    lines.push(`    primary_space: ${region.datasets?.global_catalog?.primary_space || 5}`);
+    lines.push(`    secondary_space: ${region.datasets?.global_catalog?.secondary_space || 1}`);
+    lines.push(`    unit: ${region.datasets?.global_catalog?.unit || 'MB'}`);
+    lines.push('');
+
+    lines.push('  local_catalog:');
+    lines.push(`    primary_space: ${region.datasets?.local_catalog?.primary_space || 200}`);
+    lines.push(`    secondary_space: ${region.datasets?.local_catalog?.secondary_space || 5}`);
+    lines.push(`    unit: ${region.datasets?.local_catalog?.unit || 'records'}`);
+    lines.push('');
+
+    lines.push('  aux_temp_storage:');
+    lines.push(`    primary_space: ${region.datasets?.aux_temp_storage?.primary_space || 200}`);
+    lines.push(`    secondary_space: ${region.datasets?.aux_temp_storage?.secondary_space || 10}`);
+    lines.push(`    unit: ${region.datasets?.aux_temp_storage?.unit || 'records'}`);
+    lines.push('');
+
+    lines.push('  aux_trace:');
+    lines.push(`    enabled: ${region.datasets?.aux_trace?.enabled !== undefined ? region.datasets.aux_trace.enabled : false}`);
+    lines.push('');
+
+    lines.push('  local_request_queue:');
+    lines.push(`    primary_space: ${region.datasets?.local_request_queue?.primary_space || 200}`);
+    lines.push(`    secondary_space: ${region.datasets?.local_request_queue?.secondary_space || 5}`);
+    lines.push(`    unit: ${region.datasets?.local_request_queue?.unit || 'records'}`);
+    lines.push('');
+
+    lines.push('  transaction_dump:');
+    lines.push(`    enabled: ${region.datasets?.transaction_dump?.enabled !== undefined ? region.datasets.transaction_dump.enabled : true}`);
+    lines.push('');
+
+    lines.push('  td_intrapartition:');
+    lines.push(`    primary_space: ${region.datasets?.td_intrapartition?.primary_space || 100}`);
+    lines.push(`    secondary_space: ${region.datasets?.td_intrapartition?.secondary_space || 10}`);
+    lines.push(`    unit: ${region.datasets?.td_intrapartition?.unit || 'records'}`);
+    
+    return lines.join('\n');
   }
 
   /**
@@ -70,209 +315,257 @@ export class YAMLEditorComponent {
    */
   applySyntaxHighlighting(element) {
     const yaml = element.textContent;
-
-    // Simple syntax highlighting
+    
     const highlighted = yaml
-      // Comments
       .replace(/(#.*)$/gm, '<span class="yaml-comment">$1</span>')
-      // Keys
       .replace(/^(\s*)([a-zA-Z_][a-zA-Z0-9_]*)(:\s*)/gm, '$1<span class="yaml-key">$2</span>$3')
-      // Strings
       .replace(/(['"])(.*?)\1/g, '<span class="yaml-string">$1$2$1</span>')
-      // Numbers
       .replace(/:\s*(\d+)/g, ': <span class="yaml-number">$1</span>')
-      // Booleans
-      .replace(/:\s*(true|false|yes|no|on|off)/gi, ': <span class="yaml-boolean">$1</span>')
-      // Null
-      .replace(/:\s*(null|~)/gi, ': <span class="yaml-null">$1</span>');
-
+      .replace(/:\s*(true|false|yes|no|on|off)/gi, ': <span class="yaml-boolean">$1</span>');
+    
     element.innerHTML = highlighted;
   }
 
   /**
-   * Animate content update
+   * Attach event listeners to accordion item
    */
-  animateUpdate() {
-    if (this.editorElement) {
-      this.editorElement.style.opacity = '0.7';
-      setTimeout(() => {
-        this.editorElement.style.transition = 'opacity 0.3s ease';
-        this.editorElement.style.opacity = '1';
-      }, 50);
-    }
-  }
+  attachEventListeners(item, region, yaml) {
+    const header = item.querySelector('.yaml-accordion-header-content');
+    const toggleBtn = item.querySelector('[data-action="toggle"]');
+    const editBtn = item.querySelector('[data-action="edit"]');
+    const copyBtn = item.querySelector('[data-action="copy"]');
+    const downloadBtn = item.querySelector('[data-action="download"]');
 
-  /**
-   * Highlight specific lines
-   */
-  highlightLines(startLine, endLine) {
-    const lines = this.editorElement.querySelectorAll('.line');
-    lines.forEach((line, index) => {
-      if (index >= startLine - 1 && index <= endLine - 1) {
-        line.classList.add('highlighted');
-        setTimeout(() => {
-          line.classList.remove('highlighted');
-        }, 2000);
+    // Toggle expansion
+    const toggle = (e) => {
+      e.stopPropagation();
+      const isExpanded = item.classList.contains('expanded');
+      
+      if (isExpanded) {
+        item.classList.remove('expanded');
+        this.expandedRegions.delete(region.applid);
+      } else {
+        item.classList.add('expanded');
+        this.expandedRegions.add(region.applid);
       }
+    };
+
+    header.addEventListener('click', toggle);
+    toggleBtn.addEventListener('click', toggle);
+
+    // Edit/Update YAML
+    editBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      
+      const isCurrentlyEditing = this.editingRegions.has(region.applid);
+      
+      if (isCurrentlyEditing) {
+        // Update mode - save changes
+        const textarea = item.querySelector('.yaml-editor-textarea');
+        if (textarea) {
+          const updatedYAML = textarea.value;
+          
+          try {
+            // Parse and validate YAML
+            const updatedRegion = this.parseYAMLToRegion(updatedYAML, region.applid);
+            
+            // Call update callback
+            if (this.onRegionUpdate) {
+              const success = await this.onRegionUpdate(region.applid, updatedRegion);
+              
+              if (success) {
+                this.editingRegions.delete(region.applid);
+                
+                // Re-render to show updated content
+                this.render();
+                
+                window.dispatchEvent(new CustomEvent('region-updated', {
+                  detail: { applid: region.applid }
+                }));
+              }
+            }
+          } catch (error) {
+            console.error('Failed to parse YAML:', error);
+            window.dispatchEvent(new CustomEvent('yaml-parse-error', {
+              detail: { applid: region.applid, error: error.message }
+            }));
+          }
+        }
+      } else {
+        // Edit mode - make editable
+        this.editingRegions.add(region.applid);
+        
+        // Expand if not already expanded
+        if (!item.classList.contains('expanded')) {
+          item.classList.add('expanded');
+          this.expandedRegions.add(region.applid);
+        }
+        
+        // Re-render to show textarea
+        this.render();
+      }
+    });
+
+    // Copy YAML
+    copyBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await navigator.clipboard.writeText(yaml);
+        copyBtn.innerHTML = '<span class="icon">✓</span>';
+        setTimeout(() => {
+          copyBtn.innerHTML = '<span class="icon">📋</span>';
+        }, 2000);
+        
+        // Dispatch event for toast notification
+        window.dispatchEvent(new CustomEvent('yaml-copied', { 
+          detail: { applid: region.applid } 
+        }));
+      } catch (error) {
+        console.error('Failed to copy:', error);
+      }
+    });
+
+    // Download YAML
+    downloadBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const blob = new Blob([yaml], { type: 'text/yaml' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${region.applid.toLowerCase()}-config.yaml`;
+      link.click();
+      URL.revokeObjectURL(url);
+      
+      // Dispatch event for toast notification
+      window.dispatchEvent(new CustomEvent('yaml-downloaded', { 
+        detail: { applid: region.applid } 
+      }));
     });
   }
 
   /**
-   * Copy to clipboard
+   * Parse YAML string back to region object
    */
-  async copyToClipboard() {
-    try {
-      await navigator.clipboard.writeText(this.content);
-      return true;
-    } catch (error) {
-      console.error('Failed to copy to clipboard:', error);
-      // Fallback method
-      return this.copyToClipboardFallback();
-    }
+  parseYAMLToRegion(yamlString, applid) {
+    const lines = yamlString.split('\n');
+    const region = { applid };
+    
+    // Simple YAML parser for our specific structure
+    let currentSection = null;
+    let currentSubsection = null;
+    
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return;
+      
+      // Match key-value pairs
+      const match = trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*):(.*)$/);
+      if (!match) return;
+      
+      const key = match[1];
+      const value = match[2].trim();
+      
+      // Determine indentation level
+      const indent = line.search(/\S/);
+      
+      if (indent === 2) {
+        // Top level under cics_region
+        currentSection = key;
+        if (key === 'applid') region.applid = value;
+        else if (key === 'region_hlq') region.region_hlq = value;
+        else if (key === 'cics_hlq') region.cics_hlq = value;
+      } else if (indent === 4) {
+        // Second level
+        if (currentSection === 'region_jcl') {
+          currentSubsection = key;
+        } else if (currentSection === 'sit_parameters') {
+          if (!region.sit_parameters) region.sit_parameters = {};
+          region.sit_parameters[key] = value;
+        } else if (currentSection === 'jvm') {
+          if (!region.jvm) region.jvm = { enabled: true };
+          region.jvm[key] = value;
+        } else if (currentSection === 'datasets') {
+          currentSubsection = key;
+        }
+      } else if (indent === 6) {
+        // Third level
+        if (currentSection === 'region_jcl' && currentSubsection === 'job_parameters') {
+          if (key === 'region') region.memory = value;
+        } else if (currentSection === 'datasets' && currentSubsection) {
+          if (!region.datasets) region.datasets = {};
+          if (!region.datasets[currentSubsection]) region.datasets[currentSubsection] = {};
+          region.datasets[currentSubsection][key] = parseInt(value) || value;
+        }
+      }
+    });
+    
+    return region;
   }
 
   /**
-   * Fallback clipboard copy method
+   * Set callback for region updates
    */
-  copyToClipboardFallback() {
-    const textarea = document.createElement('textarea');
-    textarea.value = this.content;
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.select();
+  setRegionUpdateHandler(callback) {
+    this.onRegionUpdate = callback;
+  }
 
+  /**
+   * Legacy method for compatibility
+   */
+  setContent(yamlString) {
+    // This method is kept for backward compatibility
+    // but the new accordion structure doesn't use it directly
+    console.log('setContent called (legacy method)');
+  }
+
+  /**
+   * Get content (for backward compatibility)
+   */
+  getContent() {
+    if (this.regions.length === 0) return '';
+    return this.regions.map(r => this.generateRegionYAML(r)).join('\n\n---\n\n');
+  }
+
+  /**
+   * Copy all YAML to clipboard
+   */
+  async copyToClipboard() {
+    const content = this.getContent();
     try {
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
+      await navigator.clipboard.writeText(content);
       return true;
     } catch (error) {
-      console.error('Fallback copy failed:', error);
-      document.body.removeChild(textarea);
+      console.error('Failed to copy:', error);
       return false;
     }
   }
 
   /**
-   * Download as file
+   * Download all YAML as file
    */
-  downloadFile(filename = 'cics-region.yaml') {
-    const blob = new Blob([this.content], { type: 'text/yaml' });
+  downloadFile(filename = 'cics-regions.yaml') {
+    const content = this.getContent();
+    const blob = new Blob([content], { type: 'text/yaml' });
     const url = URL.createObjectURL(blob);
-
     const link = document.createElement('a');
     link.href = url;
     link.download = filename;
-    link.style.display = 'none';
-
-    document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-
     URL.revokeObjectURL(url);
-  }
-
-  /**
-   * Validate YAML
-   */
-  validate() {
-    try {
-      // Basic validation - check for common YAML errors
-      const lines = this.content.split('\n');
-      const errors = [];
-
-      lines.forEach((line, index) => {
-        // Check for tabs (YAML doesn't allow tabs)
-        if (line.includes('\t')) {
-          errors.push({
-            line: index + 1,
-            message: 'YAML does not allow tabs for indentation'
-          });
-        }
-
-        // Check for inconsistent indentation
-        const indent = line.match(/^\s*/)[0].length;
-        if (indent % 2 !== 0 && line.trim() !== '') {
-          errors.push({
-            line: index + 1,
-            message: 'Inconsistent indentation (should be multiples of 2)'
-          });
-        }
-      });
-
-      return {
-        valid: errors.length === 0,
-        errors: errors
-      };
-    } catch (error) {
-      return {
-        valid: false,
-        errors: [{ line: 0, message: error.message }]
-      };
-    }
-  }
-
-  /**
-   * Format YAML content
-   */
-  format() {
-    // Basic formatting - ensure consistent indentation
-    const lines = this.content.split('\n');
-    const formatted = lines.map(line => {
-      // Replace tabs with spaces
-      return line.replace(/\t/g, '  ');
-    }).join('\n');
-
-    this.setContent(formatted);
   }
 
   /**
    * Clear content
    */
   clear() {
-    this.content = '';
-    const codeElement = this.editorElement?.querySelector('code');
-    if (codeElement) {
-      codeElement.textContent = '';
-    }
-
-    // Show placeholder
+    this.regions = [];
+    this.selectedApplid = null;
+    this.expandedRegions.clear();
+    this.render();
+    
     const placeholder = this.container.querySelector('.yaml-placeholder');
     if (placeholder) {
       placeholder.style.display = 'flex';
-    }
-  }
-
-  /**
-   * Get line count
-   */
-  getLineCount() {
-    return this.content.split('\n').length;
-  }
-
-  /**
-   * Get character count
-   */
-  getCharacterCount() {
-    return this.content.length;
-  }
-
-  /**
-   * Export as JSON
-   */
-  exportAsJSON() {
-    try {
-      // This would require a YAML parser
-      // For now, return the YAML as-is
-      return {
-        success: false,
-        message: 'JSON export requires YAML parser'
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message
-      };
     }
   }
 }

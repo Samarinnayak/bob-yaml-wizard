@@ -9,6 +9,8 @@ import { YAMLGenerator } from './yaml-generator.js';
 export class ConfigurationManager {
   constructor() {
     this.config = this.getDefaultConfig();
+    this.regions = []; // Array to store multiple regions
+    this.selectedApplid = null; // Currently selected region for YAML display
     this.history = [];
     this.maxHistorySize = 50;
   }
@@ -18,44 +20,53 @@ export class ConfigurationManager {
    */
   getDefaultConfig() {
     return {
+      sysid: '',
       applid: '',
       region_hlq: '',
-      cics_hlq: 'CICS.TS61',
-      memory: '512M',
-      jvm: {
-        enabled: false,
-        heap_size: '512M',
-        profile: 'DFHJVMPR'
-      },
-      cmci: {
-        enabled: false,
-        port: 1490
-      },
-      database: {
-        enabled: false,
-        type: 'db2',
-        connection_pool: 10
-      },
+      cics_hlq: 'CICSTS63.CICS',
       datasets: {
         csd: {
-          primary: 10,
-          secondary: 5,
-          record_format: 'FB',
-          record_length: 4089
+          primary_space: 4,
+          secondary_space: 1,
+          unit: 'MB'
         },
-        gcd: {
-          primary: 5,
-          secondary: 2
+        global_catalog: {
+          primary_space: 5,
+          secondary_space: 1,
+          unit: 'MB'
         },
-        lcd: {
-          primary: 5,
-          secondary: 2
+        local_catalog: {
+          primary_space: 200,
+          secondary_space: 5,
+          unit: 'records'
+        },
+        aux_temp_storage: {
+          primary_space: 200,
+          secondary_space: 10,
+          unit: 'records'
+        },
+        aux_trace: {
+          enabled: false
+        },
+        local_request_queue: {
+          primary_space: 200,
+          secondary_space: 5,
+          unit: 'records'
+        },
+        transaction_dump: {
+          enabled: true
+        },
+        td_intrapartition: {
+          primary_space: 100,
+          secondary_space: 10,
+          unit: 'records'
         }
       },
       sit_parameters: {
-        start: 'AUTO',
+        start: 'INITIAL',
         cicssvc: 217,
-        grplist: '(DFHLIST)'
+        gmtext: 'Region provisioned with zconfig',
+        usshome: '/uss/home'
       }
     };
   }
@@ -115,6 +126,16 @@ export class ConfigurationManager {
     const warnings = [];
     const errors = [];
 
+    // Validate SYSID
+    if (this.config.sysid) {
+      if (!/^[A-Z0-9]{1,4}$/.test(this.config.sysid)) {
+        errors.push({
+          field: 'sysid',
+          message: 'SYSID must be 1-4 alphanumeric characters'
+        });
+      }
+    }
+
     // Validate APPLID
     if (this.config.applid) {
       if (!/^[A-Z0-9]{1,8}$/.test(this.config.applid)) {
@@ -125,25 +146,7 @@ export class ConfigurationManager {
       }
     }
 
-    // Validate memory
-    if (this.config.memory) {
-      if (!/^\d+[MG]$/.test(this.config.memory)) {
-        errors.push({
-          field: 'memory',
-          message: 'Memory must be in format like 512M or 2G'
-        });
-      } else {
-        const value = parseInt(this.config.memory);
-        if (value < 256) {
-          warnings.push({
-            field: 'memory',
-            message: 'Memory allocation is very low (< 256MB)'
-          });
-        }
-      }
-    }
-
-    // Validate JVM heap
+    // Validate JVM heap (if exists)
     if (this.config.jvm && this.config.jvm.enabled) {
       const heapSize = parseInt(this.config.jvm.heap_size);
       if (heapSize < 256) {
@@ -195,7 +198,25 @@ export class ConfigurationManager {
    * Generate YAML from current configuration
    */
   generateYAML() {
-    return YAMLGenerator.generate(this.config);
+    return YAMLGenerator.generate(
+      this.config,
+      this.regions.length > 0 ? this.regions : null,
+      this.selectedApplid
+    );
+  }
+
+  /**
+   * Set selected region for YAML display
+   */
+  setSelectedRegion(applid) {
+    this.selectedApplid = applid;
+  }
+
+  /**
+   * Clear selected region
+   */
+  clearSelectedRegion() {
+    this.selectedApplid = null;
   }
 
   /**
@@ -369,6 +390,185 @@ export class ConfigurationManager {
       features: features,
       featureCount: features.length
     };
+  }
+
+  /**
+   * Duplicate current region with new properties
+   */
+  duplicateRegion(newProperties) {
+    if (!this.config.applid) {
+      return {
+        success: false,
+        error: 'No region to duplicate'
+      };
+    }
+
+    // Validate new APPLID
+    if (!newProperties.applid || !/^[A-Z0-9]{1,8}$/.test(newProperties.applid)) {
+      return {
+        success: false,
+        error: 'Invalid APPLID. Must be 1-8 alphanumeric characters.'
+      };
+    }
+
+    // Debug: Log current state
+    console.log('=== DUPLICATE REGION DEBUG ===');
+    console.log('Current regions:', this.regions.map(r => r.applid));
+    console.log('Current config applid:', this.config.applid);
+    console.log('New applid:', newProperties.applid);
+
+    // Get all existing APPLIDs (from regions array AND current config)
+    const allExistingApplids = new Set([
+      ...this.regions.map(r => r.applid),
+      this.config.applid
+    ]);
+
+    console.log('All existing APPLIDs:', Array.from(allExistingApplids));
+
+    // Check if new APPLID already exists anywhere
+    if (allExistingApplids.has(newProperties.applid)) {
+      console.log('APPLID already exists!');
+      return {
+        success: false,
+        error: `Region with APPLID ${newProperties.applid} already exists`
+      };
+    }
+
+    // Save current state to history BEFORE making changes
+    this.saveToHistory();
+
+    // Ensure current region is in the regions array before creating new one
+    const currentRegionIndex = this.regions.findIndex(r => r.applid === this.config.applid);
+    if (currentRegionIndex === -1) {
+      // Current region not in array, add it
+      console.log('Adding current region to array:', this.config.applid);
+      this.regions.push(JSON.parse(JSON.stringify(this.config)));
+    } else {
+      // Update the existing entry with current config state
+      console.log('Updating existing region in array:', this.config.applid);
+      this.regions[currentRegionIndex] = JSON.parse(JSON.stringify(this.config));
+    }
+
+    // Create a deep copy of current config
+    const duplicatedConfig = JSON.parse(JSON.stringify(this.config));
+
+    // Update with new properties
+    duplicatedConfig.applid = newProperties.applid;
+    duplicatedConfig.region_hlq = `USER.${newProperties.applid}`;
+
+    if (newProperties.memory) {
+      duplicatedConfig.memory = newProperties.memory;
+    }
+
+    if (newProperties.jvm_heap && duplicatedConfig.jvm && duplicatedConfig.jvm.enabled) {
+      duplicatedConfig.jvm.heap_size = newProperties.jvm_heap;
+    }
+
+    if (newProperties.cmci_port && duplicatedConfig.cmci && duplicatedConfig.cmci.enabled) {
+      duplicatedConfig.cmci.port = newProperties.cmci_port;
+    }
+
+    // Add duplicated config to regions array
+    console.log('Adding new region to array:', duplicatedConfig.applid);
+    this.regions.push(duplicatedConfig);
+
+    // Make the duplicated config the current one
+    this.config = duplicatedConfig;
+
+    console.log('Final regions array:', this.regions.map(r => r.applid));
+    console.log('Final current config:', this.config.applid);
+    console.log('=== END DEBUG ===');
+
+    return {
+      success: true,
+      config: this.getConfig(),
+      allRegions: this.getAllRegions()
+    };
+  }
+
+  /**
+   * Get all regions including current config
+   */
+  getAllRegions() {
+    const allRegions = this.regions.map(r => JSON.parse(JSON.stringify(r)));
+    
+    console.log('getAllRegions - regions array:', this.regions.map(r => r.applid));
+    console.log('getAllRegions - current config:', this.config.applid);
+    
+    // If current config has an applid and is not in regions array, include it
+    if (this.config.applid) {
+      const existsInRegions = allRegions.some(r => r.applid === this.config.applid);
+      console.log('getAllRegions - current config exists in regions?', existsInRegions);
+      if (!existsInRegions) {
+        allRegions.push(JSON.parse(JSON.stringify(this.config)));
+        console.log('getAllRegions - added current config to result');
+      }
+    }
+    
+    console.log('getAllRegions - returning:', allRegions.map(r => r.applid));
+    return allRegions;
+  }
+
+  /**
+   * Switch to a different region
+   */
+  switchToRegion(applid) {
+    const region = this.regions.find(r => r.applid === applid);
+    if (region) {
+      this.saveToHistory();
+      this.config = JSON.parse(JSON.stringify(region));
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Delete a region
+   */
+  deleteRegion(applid) {
+    const index = this.regions.findIndex(r => r.applid === applid);
+    if (index !== -1) {
+      this.regions.splice(index, 1);
+      
+      // If we deleted the current region, switch to another or reset
+      if (this.config.applid === applid) {
+        if (this.regions.length > 0) {
+          this.config = JSON.parse(JSON.stringify(this.regions[0]));
+        } else {
+          this.config = this.getDefaultConfig();
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Update a region with new data
+   */
+  updateRegion(applid, updatedData) {
+    console.log('updateRegion called for:', applid);
+    console.log('Updated data:', updatedData);
+
+    // Find the region in the array
+    const index = this.regions.findIndex(r => r.applid === applid);
+    
+    if (index !== -1) {
+      // Update in regions array
+      this.regions[index] = { ...this.regions[index], ...updatedData };
+      console.log('Updated region in array at index:', index);
+    }
+
+    // If it's the current config, update that too
+    if (this.config.applid === applid) {
+      this.config = { ...this.config, ...updatedData };
+      console.log('Updated current config');
+    }
+
+    // Save to history
+    this.saveToHistory();
+
+    return true;
   }
 }
 
