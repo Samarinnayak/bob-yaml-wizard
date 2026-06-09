@@ -74,11 +74,13 @@ html, body {
   background: var(--background);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
 }
 
 body {
   display: flex;
   flex-direction: column;
+  touch-action: pan-y;
 }
 
 /* ============================================
@@ -386,6 +388,17 @@ code {
   align-items: center;
   justify-content: center;
   min-height: 100%;
+  overflow: hidden;
+  touch-action: none !important;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  position: relative;
+  cursor: grab;
+}
+
+.diagram-container:active {
+  cursor: grabbing;
 }
 
 .diagram-placeholder,

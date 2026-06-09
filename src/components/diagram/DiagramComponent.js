@@ -15,8 +15,28 @@ export class DiagramComponent {
 
     this.currentConfig = null;
     this.zoomLevel = 1;
+    this.panX = 0;
+    this.panY = 0;
     this.onRegionClick = null; // Callback for region clicks
     this.onRegionSelect = null; // Callback for region selection (to show YAML)
+    
+    // Touch gesture state
+    this.touchState = {
+      initialDistance: 0,
+      initialScale: 1,
+      initialPanX: 0,
+      initialPanY: 0,
+      touches: []
+    };
+    
+    // Mouse drag state
+    this.dragState = {
+      isDragging: false,
+      startX: 0,
+      startY: 0,
+      initialPanX: 0,
+      initialPanY: 0
+    };
 
     // Initialize Mermaid
     mermaid.initialize({
@@ -29,6 +49,9 @@ export class DiagramComponent {
         curve: 'basis'
       }
     });
+    
+    // Setup touch gestures
+    this.setupTouchGestures();
   }
 
   /**
@@ -109,32 +132,29 @@ export class DiagramComponent {
       });
     }
 
-    // All 8 Datasets (always present when applid exists)
+    // All 8 Datasets (always present when applid exists) - arranged horizontally in a subgraph
     if (config.applid) {
-      components.push(`CSD["📁 CSD<br/>System Definitions"]`);
-      components.push(`GCD["📁 GCD<br/>Global Catalog"]`);
-      components.push(`LCD["📁 LCD<br/>Local Catalog"]`);
-      components.push(`ATS["📁 ATS<br/>Aux Temp Storage"]`);
-      components.push(`ATR["📁 ATR<br/>Aux Trace"]`);
-      components.push(`LRQ["📁 LRQ<br/>Local Request Queue"]`);
-      components.push(`TXD["📁 TXD<br/>Transaction Dump"]`);
-      components.push(`TDI["📁 TDI<br/>TD Intrapartition"]`);
+      components.push(`
+    subgraph Datasets["📁 Datasets"]
+        direction TB
+        CSD["CSD<br/>System Definitions"]
+        GCD["GCD<br/>Global Catalog"]
+        LCD["LCD<br/>Local Catalog"]
+        ATS["ATS<br/>Aux Temp Storage"]
+        ATR["ATR<br/>Aux Trace"]
+        LRQ["LRQ<br/>Local Request Queue"]
+        TXD["TXD<br/>Transaction Dump"]
+        TDI["TDI<br/>TD Intrapartition"]
+    end`);
       
-      connections.push('CICS -.-> CSD');
-      connections.push('CICS -.-> GCD');
-      connections.push('CICS -.-> LCD');
-      connections.push('CICS -.-> ATS');
-      connections.push('CICS -.-> ATR');
-      connections.push('CICS -.-> LRQ');
-      connections.push('CICS -.-> TXD');
-      connections.push('CICS -.-> TDI');
+      connections.push('CICS -.-> Datasets');
       
       styles.push('class CSD,GCD,LCD,ATS,ATR,LRQ,TXD,TDI datasetStyle');
     }
 
-    // Build the complete diagram
+    // Build the complete diagram with LR (Left-Right) layout for vertical region stacking
     const mermaidCode = `
-graph TD
+graph LR
     ${components.join('\n    ')}
 
     ${connections.join('\n    ')}
@@ -143,7 +163,7 @@ graph TD
     classDef jvmStyle fill:#24a148,stroke:#fff,stroke-width:2px,color:#fff
     classDef cmciStyle fill:#8a3ffc,stroke:#fff,stroke-width:2px,color:#fff
     classDef dbStyle fill:#da1e28,stroke:#fff,stroke-width:2px,color:#fff
-    classDef datasetStyle fill:#f1c21b,stroke:#333,stroke-width:2px,color:#333
+    classDef datasetStyle fill:#f1c21b,stroke:#333,stroke-width:2px,color:#fff
 
     ${styles.join('\n    ')}
 `;
@@ -186,7 +206,8 @@ graph TD
         });
       }
 
-      // All 8 Datasets
+      // All 8 Datasets - arranged horizontally in a subgraph
+      const datasetSubgraphId = `Datasets${index}`;
       const csdId = `CSD${index}`;
       const gcdId = `GCD${index}`;
       const lcdId = `LCD${index}`;
@@ -196,30 +217,27 @@ graph TD
       const txdId = `TXD${index}`;
       const tdiId = `TDI${index}`;
       
-      components.push(`${csdId}["📁 CSD<br/>${config.applid}"]`);
-      components.push(`${gcdId}["📁 GCD<br/>${config.applid}"]`);
-      components.push(`${lcdId}["📁 LCD<br/>${config.applid}"]`);
-      components.push(`${atsId}["📁 ATS<br/>${config.applid}"]`);
-      components.push(`${atrId}["📁 ATR<br/>${config.applid}"]`);
-      components.push(`${lrqId}["📁 LRQ<br/>${config.applid}"]`);
-      components.push(`${txdId}["📁 TXD<br/>${config.applid}"]`);
-      components.push(`${tdiId}["📁 TDI<br/>${config.applid}"]`);
+      components.push(`
+    subgraph ${datasetSubgraphId}["📁 Datasets - ${config.applid}"]
+        direction TB
+        ${csdId}["CSD"]
+        ${gcdId}["GCD"]
+        ${lcdId}["LCD"]
+        ${atsId}["ATS"]
+        ${atrId}["ATR"]
+        ${lrqId}["LRQ"]
+        ${txdId}["TXD"]
+        ${tdiId}["TDI"]
+    end`);
       
-      connections.push(`${regionId} -.-> ${csdId}`);
-      connections.push(`${regionId} -.-> ${gcdId}`);
-      connections.push(`${regionId} -.-> ${lcdId}`);
-      connections.push(`${regionId} -.-> ${atsId}`);
-      connections.push(`${regionId} -.-> ${atrId}`);
-      connections.push(`${regionId} -.-> ${lrqId}`);
-      connections.push(`${regionId} -.-> ${txdId}`);
-      connections.push(`${regionId} -.-> ${tdiId}`);
+      connections.push(`${regionId} -.-> ${datasetSubgraphId}`);
       
       styles.push(`class ${csdId},${gcdId},${lcdId},${atsId},${atrId},${lrqId},${txdId},${tdiId} datasetStyle`);
     });
 
-    // Build the complete diagram
+    // Build the complete diagram with LR (Left-Right) layout for vertical stacking
     const mermaidCode = `
-graph TD
+graph LR
     ${components.join('\n    ')}
 
     ${connections.join('\n    ')}
@@ -228,7 +246,7 @@ graph TD
     classDef jvmStyle fill:#24a148,stroke:#fff,stroke-width:2px,color:#fff
     classDef cmciStyle fill:#8a3ffc,stroke:#fff,stroke-width:2px,color:#fff
     classDef dbStyle fill:#da1e28,stroke:#fff,stroke-width:2px,color:#fff
-    classDef datasetStyle fill:#f1c21b,stroke:#333,stroke-width:2px,color:#333
+    classDef datasetStyle fill:#f1c21b,stroke:#333,stroke-width:2px,color:#fff
 
     ${styles.join('\n    ')}
 `;
@@ -241,7 +259,7 @@ graph TD
    */
   getEmptyDiagram() {
     return `
-graph TD
+graph LR
     START["🚀 Start Building<br/>Chat with Bob to begin"]
 
     classDef startStyle fill:#e0e0e0,stroke:#999,stroke-width:2px,color:#333
@@ -291,12 +309,12 @@ graph TD
   }
 
   /**
-   * Apply current zoom level
+   * Apply current zoom level and pan
    */
   applyZoom() {
     const svg = this.container.querySelector('svg');
     if (svg) {
-      svg.style.transform = `scale(${this.zoomLevel})`;
+      svg.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.zoomLevel})`;
       svg.style.transformOrigin = 'center center';
       svg.style.transition = 'transform 0.3s ease';
     }
@@ -523,6 +541,159 @@ graph TD
    */
   setRegionSelectHandler(callback) {
     this.onRegionSelect = callback;
+  }
+
+  /**
+   * Setup touch gestures for pinch-to-zoom and pan, plus mouse drag
+   */
+  setupTouchGestures() {
+    // Touch events for pinch-to-zoom and two-finger pan
+    this.container.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
+    this.container.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
+    this.container.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: false });
+    
+    // Mouse events for single-click drag
+    this.container.addEventListener('mousedown', this.handleMouseDown.bind(this));
+    this.container.addEventListener('mousemove', this.handleMouseMove.bind(this));
+    this.container.addEventListener('mouseup', this.handleMouseUp.bind(this));
+    this.container.addEventListener('mouseleave', this.handleMouseUp.bind(this));
+  }
+
+  /**
+   * Handle touch start
+   */
+  handleTouchStart(e) {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      
+      // Calculate initial center point
+      const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      
+      // Store initial touch positions and center
+      this.touchState.touches = Array.from(e.touches).map(t => ({
+        x: t.clientX,
+        y: t.clientY
+      }));
+      this.touchState.initialCenterX = centerX;
+      this.touchState.initialCenterY = centerY;
+      
+      // Calculate initial distance for pinch zoom
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      this.touchState.initialDistance = Math.sqrt(dx * dx + dy * dy);
+      this.touchState.initialScale = this.zoomLevel;
+      this.touchState.initialPanX = this.panX;
+      this.touchState.initialPanY = this.panY;
+    }
+  }
+
+  /**
+   * Handle touch move
+   */
+  handleTouchMove(e) {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      
+      // Calculate current center point
+      const currentCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const currentCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      
+      // Calculate current distance for pinch zoom
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const currentDistance = Math.sqrt(dx * dx + dy * dy);
+      
+      // Calculate zoom scale
+      const scale = currentDistance / this.touchState.initialDistance;
+      this.zoomLevel = Math.max(0.5, Math.min(3, this.touchState.initialScale * scale));
+      
+      // Calculate pan based on center point movement
+      const deltaX = currentCenterX - this.touchState.initialCenterX;
+      const deltaY = currentCenterY - this.touchState.initialCenterY;
+      
+      this.panX = this.touchState.initialPanX + deltaX;
+      this.panY = this.touchState.initialPanY + deltaY;
+      
+      // Apply transform without transition for smooth gesture
+      const svg = this.container.querySelector('svg');
+      if (svg) {
+        svg.style.transition = 'none';
+        svg.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.zoomLevel})`;
+      }
+    }
+  }
+
+  /**
+   * Handle touch end
+   */
+  handleTouchEnd(e) {
+    if (e.touches.length < 2) {
+      // Reset touch state
+      this.touchState.touches = [];
+      this.touchState.initialDistance = 0;
+      
+      // Re-enable transition
+      const svg = this.container.querySelector('svg');
+      if (svg) {
+        svg.style.transition = 'transform 0.3s ease';
+      }
+    }
+  }
+
+  /**
+   * Handle mouse down for drag
+   */
+  handleMouseDown(e) {
+    // Only start drag on left click and not on interactive elements
+    if (e.button === 0 && !e.target.closest('.nodeLabel, text, a')) {
+      this.dragState.isDragging = true;
+      this.dragState.startX = e.clientX;
+      this.dragState.startY = e.clientY;
+      this.dragState.initialPanX = this.panX;
+      this.dragState.initialPanY = this.panY;
+      
+      const svg = this.container.querySelector('svg');
+      if (svg) {
+        svg.style.cursor = 'grabbing';
+      }
+    }
+  }
+
+  /**
+   * Handle mouse move for drag
+   */
+  handleMouseMove(e) {
+    if (this.dragState.isDragging) {
+      e.preventDefault();
+      
+      const deltaX = e.clientX - this.dragState.startX;
+      const deltaY = e.clientY - this.dragState.startY;
+      
+      this.panX = this.dragState.initialPanX + deltaX;
+      this.panY = this.dragState.initialPanY + deltaY;
+      
+      const svg = this.container.querySelector('svg');
+      if (svg) {
+        svg.style.transition = 'none';
+        svg.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.zoomLevel})`;
+      }
+    }
+  }
+
+  /**
+   * Handle mouse up to end drag
+   */
+  handleMouseUp(e) {
+    if (this.dragState.isDragging) {
+      this.dragState.isDragging = false;
+      
+      const svg = this.container.querySelector('svg');
+      if (svg) {
+        svg.style.cursor = 'grab';
+        svg.style.transition = 'transform 0.3s ease';
+      }
+    }
   }
 }
 
