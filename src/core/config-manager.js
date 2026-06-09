@@ -20,44 +20,53 @@ export class ConfigurationManager {
    */
   getDefaultConfig() {
     return {
+      sysid: '',
       applid: '',
       region_hlq: '',
-      cics_hlq: 'CICS.TS61',
-      memory: '512M',
-      jvm: {
-        enabled: false,
-        heap_size: '512M',
-        profile: 'DFHJVMPR'
-      },
-      cmci: {
-        enabled: false,
-        port: 1490
-      },
-      database: {
-        enabled: false,
-        type: 'db2',
-        connection_pool: 10
-      },
+      cics_hlq: 'CICSTS63.CICS',
       datasets: {
         csd: {
-          primary: 10,
-          secondary: 5,
-          record_format: 'FB',
-          record_length: 4089
+          primary_space: 4,
+          secondary_space: 1,
+          unit: 'MB'
         },
-        gcd: {
-          primary: 5,
-          secondary: 2
+        global_catalog: {
+          primary_space: 5,
+          secondary_space: 1,
+          unit: 'MB'
         },
-        lcd: {
-          primary: 5,
-          secondary: 2
+        local_catalog: {
+          primary_space: 200,
+          secondary_space: 5,
+          unit: 'records'
+        },
+        aux_temp_storage: {
+          primary_space: 200,
+          secondary_space: 10,
+          unit: 'records'
+        },
+        aux_trace: {
+          enabled: false
+        },
+        local_request_queue: {
+          primary_space: 200,
+          secondary_space: 5,
+          unit: 'records'
+        },
+        transaction_dump: {
+          enabled: true
+        },
+        td_intrapartition: {
+          primary_space: 100,
+          secondary_space: 10,
+          unit: 'records'
         }
       },
       sit_parameters: {
-        start: 'AUTO',
+        start: 'INITIAL',
         cicssvc: 217,
-        grplist: '(DFHLIST)'
+        gmtext: 'Region provisioned with zconfig',
+        usshome: '/uss/home'
       }
     };
   }
@@ -117,6 +126,16 @@ export class ConfigurationManager {
     const warnings = [];
     const errors = [];
 
+    // Validate SYSID
+    if (this.config.sysid) {
+      if (!/^[A-Z0-9]{1,4}$/.test(this.config.sysid)) {
+        errors.push({
+          field: 'sysid',
+          message: 'SYSID must be 1-4 alphanumeric characters'
+        });
+      }
+    }
+
     // Validate APPLID
     if (this.config.applid) {
       if (!/^[A-Z0-9]{1,8}$/.test(this.config.applid)) {
@@ -127,25 +146,7 @@ export class ConfigurationManager {
       }
     }
 
-    // Validate memory
-    if (this.config.memory) {
-      if (!/^\d+[MG]$/.test(this.config.memory)) {
-        errors.push({
-          field: 'memory',
-          message: 'Memory must be in format like 512M or 2G'
-        });
-      } else {
-        const value = parseInt(this.config.memory);
-        if (value < 256) {
-          warnings.push({
-            field: 'memory',
-            message: 'Memory allocation is very low (< 256MB)'
-          });
-        }
-      }
-    }
-
-    // Validate JVM heap
+    // Validate JVM heap (if exists)
     if (this.config.jvm && this.config.jvm.enabled) {
       const heapSize = parseInt(this.config.jvm.heap_size);
       if (heapSize < 256) {

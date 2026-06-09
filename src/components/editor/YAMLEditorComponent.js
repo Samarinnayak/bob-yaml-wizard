@@ -196,9 +196,11 @@ export class YAMLEditorComponent {
    */
   getRegionFeatures(region) {
     const features = [];
-    if (region.jvm && region.jvm.enabled) features.push('JVM');
-    if (region.cmci && region.cmci.enabled) features.push('CMCI');
-    if (region.database && region.database.enabled) features.push('DB');
+    if (region.sysid) features.push(`SYSID: ${region.sysid}`);
+    if (region.jvm_profiles && region.jvm_profiles.length > 0) {
+      const profileNames = region.jvm_profiles.map(p => p.replace('.jvmprofile', '')).join(', ');
+      features.push(`JVM: ${profileNames}`);
+    }
     return features.length > 0 ? features.join(', ') : 'Basic';
   }
 
@@ -212,54 +214,98 @@ export class YAMLEditorComponent {
     lines.push(`# Generated: ${new Date().toISOString()}`);
     lines.push('');
     lines.push('cics_region:');
+    
+    if (region.sysid) {
+      lines.push(`  sysid: ${region.sysid}`);
+    }
+    
     lines.push(`  applid: ${region.applid}`);
     lines.push('  installation:');
     lines.push('    data_sets:');
     lines.push('      cics:');
-    lines.push(`        hlq: ${region.cics_hlq || 'CICS.TS61'}`);
-    lines.push(`  region_hlq: ${region.region_hlq || `USER.${region.applid}`}`);
-    lines.push('');
-    lines.push('  region_jcl:');
-    lines.push('    job_parameters:');
-    lines.push(`      region: ${region.memory || '512M'}`);
+    lines.push(`        hlq: ${region.cics_hlq || 'CICSTS63.CICS'}`);
+    lines.push(`  region_hlq: ${region.region_hlq || `REGION.${region.applid}`}`);
     lines.push('');
     lines.push('  sit_parameters:');
-    lines.push(`    start: ${region.sit_parameters?.start || 'AUTO'}`);
+    lines.push(`    start: ${region.sit_parameters?.start || 'INITIAL'}`);
     lines.push(`    cicssvc: ${region.sit_parameters?.cicssvc || 217}`);
-    lines.push(`    grplist: ${region.sit_parameters?.grplist || '(DFHLIST)'}`);
-    
-    if (region.sit_parameters?.mnfreq) {
-      lines.push(`    mnfreq: ${region.sit_parameters.mnfreq}`);
+    if (region.sit_parameters?.gmtext) {
+      lines.push(`    gmtext: ${region.sit_parameters.gmtext}`);
     }
-    
-    if (region.jvm && region.jvm.enabled) {
-      lines.push('');
-      lines.push('  jvm:');
-      lines.push(`    heap_size: ${region.jvm.heap_size || '512M'}`);
-      if (region.jvm.profile) {
-        lines.push(`    profile: ${region.jvm.profile}`);
-      }
+    if (region.sit_parameters?.usshome) {
+      lines.push(`    usshome: ${region.sit_parameters.usshome}`);
     }
-    
-    if (region.cmci && region.cmci.enabled) {
-      lines.push('');
-      lines.push('  extensions:');
-      lines.push('    - cics_cmci:');
-      lines.push(`        port: ${region.cmci.port || 1490}`);
-    }
-    
     lines.push('');
-    lines.push('  datasets:');
-    if (region.datasets?.csd) {
-      lines.push('    csd:');
-      lines.push(`      primary: ${region.datasets.csd.primary || 10}`);
-      lines.push(`      secondary: ${region.datasets.csd.secondary || 5}`);
+
+    // Extensions (CMCI, etc.)
+    if (region.extensions) {
+      lines.push('  # Extensions');
+      lines.push('  extensions:');
+      
+      if (region.extensions.cics_cmci) {
+        lines.push('    cics_cmci:');
+        lines.push(`      provider: ${region.extensions.cics_cmci.provider || 'JVMSERVER'}`);
+        lines.push(`      port: ${region.extensions.cics_cmci.port || 1490}`);
+      }
+      
+      lines.push('');
     }
-    if (region.datasets?.gcd) {
-      lines.push('    gcd:');
-      lines.push(`      primary: ${region.datasets.gcd.primary || 5}`);
-      lines.push(`      secondary: ${region.datasets.gcd.secondary || 2}`);
+
+    // JVM Profiles (optional)
+    if (region.jvm_profiles && region.jvm_profiles.length > 0) {
+      lines.push('  # JVM Configuration');
+      lines.push('  jvm_profiles:');
+      region.jvm_profiles.forEach(profile => {
+        lines.push(`    - "${profile}"`);
+      });
+      lines.push('');
     }
+
+    // All 8 datasets
+    lines.push('  # Dataset Configuration');
+    
+    lines.push('  csd:');
+    lines.push(`    primary_space: ${region.datasets?.csd?.primary_space || 4}`);
+    lines.push(`    secondary_space: ${region.datasets?.csd?.secondary_space || 1}`);
+    lines.push(`    unit: ${region.datasets?.csd?.unit || 'MB'}`);
+    lines.push('');
+
+    lines.push('  global_catalog:');
+    lines.push(`    primary_space: ${region.datasets?.global_catalog?.primary_space || 5}`);
+    lines.push(`    secondary_space: ${region.datasets?.global_catalog?.secondary_space || 1}`);
+    lines.push(`    unit: ${region.datasets?.global_catalog?.unit || 'MB'}`);
+    lines.push('');
+
+    lines.push('  local_catalog:');
+    lines.push(`    primary_space: ${region.datasets?.local_catalog?.primary_space || 200}`);
+    lines.push(`    secondary_space: ${region.datasets?.local_catalog?.secondary_space || 5}`);
+    lines.push(`    unit: ${region.datasets?.local_catalog?.unit || 'records'}`);
+    lines.push('');
+
+    lines.push('  aux_temp_storage:');
+    lines.push(`    primary_space: ${region.datasets?.aux_temp_storage?.primary_space || 200}`);
+    lines.push(`    secondary_space: ${region.datasets?.aux_temp_storage?.secondary_space || 10}`);
+    lines.push(`    unit: ${region.datasets?.aux_temp_storage?.unit || 'records'}`);
+    lines.push('');
+
+    lines.push('  aux_trace:');
+    lines.push(`    enabled: ${region.datasets?.aux_trace?.enabled !== undefined ? region.datasets.aux_trace.enabled : false}`);
+    lines.push('');
+
+    lines.push('  local_request_queue:');
+    lines.push(`    primary_space: ${region.datasets?.local_request_queue?.primary_space || 200}`);
+    lines.push(`    secondary_space: ${region.datasets?.local_request_queue?.secondary_space || 5}`);
+    lines.push(`    unit: ${region.datasets?.local_request_queue?.unit || 'records'}`);
+    lines.push('');
+
+    lines.push('  transaction_dump:');
+    lines.push(`    enabled: ${region.datasets?.transaction_dump?.enabled !== undefined ? region.datasets.transaction_dump.enabled : true}`);
+    lines.push('');
+
+    lines.push('  td_intrapartition:');
+    lines.push(`    primary_space: ${region.datasets?.td_intrapartition?.primary_space || 100}`);
+    lines.push(`    secondary_space: ${region.datasets?.td_intrapartition?.secondary_space || 10}`);
+    lines.push(`    unit: ${region.datasets?.td_intrapartition?.unit || 'records'}`);
     
     return lines.join('\n');
   }

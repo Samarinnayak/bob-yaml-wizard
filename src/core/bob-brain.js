@@ -84,9 +84,10 @@ export class BobBrain {
     // Response templates
     this.responseTemplates = {
       CREATE_REGION: {
-        initial: "I'll help you create a CICS region! What should we call it? (e.g., PROD01, DEVTEST)",
-        success: "Great! I've created region **{applid}** with:\n\n{features}\n\nWould you like to add any additional features?",
-        followup: "Your region is ready! You can:\n- Add Java support\n- Enable remote management\n- Add database connection\n- Optimize for production"
+        initial: "I'll help you create a CICS region! First, what SYSID should we use? (1-4 characters, e.g., SYS1, PROD)",
+        askApplid: "Great! Now, what APPLID should we use for this region? (1-8 characters, e.g., APPLID1, DEVTEST)",
+        success: "✅ **Region created successfully!**\n\n**SYSID:** {sysid}\n**APPLID:** {applid}\n**Region HLQ:** {region_hlq}\n\nAll 8 required datasets have been configured with default values.",
+        followup: "Your region is ready! The YAML includes all required datasets and SIT parameters."
       },
       ADD_JVM: {
         initial: "Adding JVM support for Java applications...",
@@ -168,71 +169,57 @@ export class BobBrain {
       };
     }
 
-    // Extract applid if provided in message
-    const applidMatch = message.match(/called?\s+([A-Z0-9]{1,8})/i);
-
-    if (applidMatch) {
-      const applid = applidMatch[1].toUpperCase();
-      return await this.createRegionWithApplid(applid, message);
-    }
-
-    // Ask for applid
-    this.context.awaitingInput = 'applid';
+    // Step 1: Ask for SYSID
+    this.context.awaitingInput = 'sysid';
     return {
       text: this.responseTemplates.CREATE_REGION.initial,
       type: 'question',
-      suggestions: ['PROD01', 'DEVTEST', 'JAVAPROD']
+      suggestions: ['SYS1', 'PROD', 'DEV', 'TEST']
     };
   }
 
   /**
-   * Create region with specified applid
+   * Create region with SYSID and APPLID
    */
-  async createRegionWithApplid(applid, originalMessage) {
-    // Determine region type from message
-    const isJava = /java/i.test(originalMessage);
-    const isDev = /dev|test/i.test(originalMessage);
-    const isProd = /prod/i.test(originalMessage);
-
-    // Update configuration
-    const updates = {
-      applid: applid,
-      region_hlq: `USER.${applid}`,
-      memory: isDev ? '256M' : '512M'
-    };
-
-    // Add JVM if Java mentioned
-    if (isJava) {
-      updates.jvm = {
-        enabled: true,
-        heap_size: '512M'
+  async createRegionWithDetails(sysid, applid) {
+    // Validate inputs
+    if (!/^[A-Z0-9]{1,4}$/i.test(sysid)) {
+      return {
+        text: '❌ Invalid SYSID. It must be 1-4 alphanumeric characters. Please try again.',
+        type: 'error',
+        suggestions: ['SYS1', 'PROD', 'DEV']
       };
     }
 
-    this.configManager.updateConfig(updates);
-
-    // Build features list
-    const features = [
-      `✓ Region name: **${applid}**`,
-      `✓ Memory: **${updates.memory}**`,
-      `✓ Standard datasets configured`,
-      `✓ Auto-start enabled`
-    ];
-
-    if (isJava) {
-      features.push('✓ JVM support with 512MB heap');
+    if (!/^[A-Z0-9]{1,8}$/i.test(applid)) {
+      return {
+        text: '❌ Invalid APPLID. It must be 1-8 alphanumeric characters. Please try again.',
+        type: 'error',
+        suggestions: ['APPLID1', 'DEVTEST', 'PROD01']
+      };
     }
 
+    // Update configuration with all required fields
+    const updates = {
+      sysid: sysid.toUpperCase(),
+      applid: applid.toUpperCase(),
+      region_hlq: `REGION.${applid.toUpperCase()}`,
+      cics_hlq: 'CICSTS63.CICS'
+    };
+
+    this.configManager.updateConfig(updates);
+
     const text = this.responseTemplates.CREATE_REGION.success
-      .replace('{applid}', applid)
-      .replace('{features}', features.join('\n'));
+      .replace('{sysid}', updates.sysid)
+      .replace('{applid}', updates.applid)
+      .replace('{region_hlq}', updates.region_hlq);
 
     return {
       text: text,
       type: 'success',
       configChanges: updates,
       diagramChanges: true,
-      suggestions: ['Add CMCI', 'Add database', 'Optimize']
+      suggestions: ['Create another region', 'Download YAML', 'View configuration']
     };
   }
 
@@ -246,38 +233,24 @@ export class BobBrain {
       return {
         text: "Let's create a CICS region first! What should we call it?",
         type: 'info',
-        suggestions: ['PROD01', 'DEVTEST', 'JAVAPROD']
+        suggestions: ['SYS1', 'PROD', 'DEV']
       };
     }
 
-    if (config.jvm && config.jvm.enabled) {
+    if (config.jvm_profiles && config.jvm_profiles.length > 0) {
       return {
-        text: `JVM is already enabled with ${config.jvm.heap_size} heap. Would you like to:\n- Increase heap size\n- Modify JVM profile\n- Keep current settings`,
+        text: `JVM profile already configured: **${config.jvm_profiles[0].name}**\n\nWould you like to modify it or add another profile?`,
         type: 'info',
-        suggestions: ['Increase to 1G', 'Keep current']
+        suggestions: ['Modify profile', 'Add another', 'Keep current']
       };
     }
 
-    // Add JVM
-    const updates = {
-      jvm: {
-        enabled: true,
-        heap_size: '512M',
-        profile: 'DFHJVMPR'
-      }
-    };
-
-    this.configManager.updateConfig(updates);
-
-    const text = this.responseTemplates.ADD_JVM.success
-      .replace('{heap_size}', '512MB');
-
+    // Ask for JVM profile name
+    this.context.awaitingInput = 'jvm_profile_name';
     return {
-      text: text + '\n\n' + this.responseTemplates.ADD_JVM.suggestion,
-      type: 'success',
-      configChanges: updates,
-      diagramChanges: true,
-      suggestions: ['Increase heap to 1G', 'Add CMCI', 'Done']
+      text: "What should we name the JVM profile? (e.g., DFHJVMPR, EYUSMSSJ)",
+      type: 'question',
+      suggestions: ['DFHJVMPR', 'EYUSMSSJ', 'JAVAPROD']
     };
   }
 
@@ -290,36 +263,24 @@ export class BobBrain {
     if (!config.applid) {
       return {
         text: "Let's create a CICS region first! What should we call it?",
-        type: 'info'
+        type: 'info',
+        suggestions: ['SYS1', 'PROD', 'DEV']
       };
     }
 
-    if (config.cmci && config.cmci.enabled) {
+    if (config.extensions && config.extensions.cics_cmci) {
       return {
-        text: `CMCI is already enabled on port ${config.cmci.port}. Everything is set up for remote management!`,
+        text: `CMCI is already enabled on port ${config.extensions.cics_cmci.port}. Everything is set up for remote management!`,
         type: 'info'
       };
     }
 
-    // Add CMCI
-    const updates = {
-      cmci: {
-        enabled: true,
-        port: 1490
-      }
-    };
-
-    this.configManager.updateConfig(updates);
-
-    const text = this.responseTemplates.ADD_CMCI.success
-      .replace('{port}', '1490');
-
+    // Ask for CMCI port
+    this.context.awaitingInput = 'cmci_port';
     return {
-      text: text + '\n\n' + this.responseTemplates.ADD_CMCI.info,
-      type: 'success',
-      configChanges: updates,
-      diagramChanges: true,
-      suggestions: ['Add database', 'Optimize', 'Done']
+      text: "What port should CMCI use? (default: 1490)",
+      type: 'question',
+      suggestions: ['1490', '10443', '12345']
     };
   }
 
@@ -451,26 +412,110 @@ Just tell me what you need in plain English, and I'll help you build it! 🚀`,
   }
 
   /**
-   * Handle awaited input (e.g., applid)
+   * Handle awaited input (SYSID, APPLID, JVM profile name)
    */
   async handleAwaitedInput(message) {
     const inputType = this.context.awaitingInput;
-    this.context.awaitingInput = null;
+    const input = message.trim().toUpperCase();
 
-    if (inputType === 'applid') {
-      const applid = message.trim().toUpperCase();
-
-      // Validate applid
-      if (!/^[A-Z0-9]{1,8}$/.test(applid)) {
-        this.context.awaitingInput = 'applid';
+    if (inputType === 'sysid') {
+      // Validate SYSID
+      if (!/^[A-Z0-9]{1,4}$/.test(input)) {
         return {
-          text: "APPLID must be 1-8 alphanumeric characters. Please try again:",
+          text: "❌ SYSID must be 1-4 alphanumeric characters. Please try again:",
           type: 'error',
-          suggestions: ['PROD01', 'DEVTEST', 'JAVAPROD']
+          suggestions: ['SYS1', 'PROD', 'DEV', 'TEST']
         };
       }
 
-      return await this.createRegionWithApplid(applid, message);
+      // Store SYSID and ask for APPLID
+      this.context.tempSysid = input;
+      this.context.awaitingInput = 'applid';
+      
+      return {
+        text: this.responseTemplates.CREATE_REGION.askApplid,
+        type: 'question',
+        suggestions: ['APPLID1', 'DEVTEST', 'PROD01', 'JAVAPROD']
+      };
+    }
+
+    if (inputType === 'applid') {
+      // Validate APPLID
+      if (!/^[A-Z0-9]{1,8}$/.test(input)) {
+        return {
+          text: "❌ APPLID must be 1-8 alphanumeric characters. Please try again:",
+          type: 'error',
+          suggestions: ['APPLID1', 'DEVTEST', 'PROD01']
+        };
+      }
+
+      // Create region with both SYSID and APPLID
+      const sysid = this.context.tempSysid;
+      this.context.awaitingInput = null;
+      this.context.tempSysid = null;
+
+      return await this.createRegionWithDetails(sysid, input);
+    }
+
+    if (inputType === 'jvm_profile_name') {
+      // Validate JVM profile name (1-8 characters)
+      if (!/^[A-Z0-9]{1,8}$/.test(input)) {
+        return {
+          text: "❌ JVM profile name must be 1-8 alphanumeric characters. Please try again:",
+          type: 'error',
+          suggestions: ['DFHJVMPR', 'EYUSMSSJ', 'JAVAPROD']
+        };
+      }
+
+      // Add JVM profile as string path
+      const updates = {
+        jvm_profiles: [`${input}.jvmprofile`]
+      };
+
+      this.configManager.updateConfig(updates);
+      this.context.awaitingInput = null;
+
+      return {
+        text: `✅ **JVM Profile Added!**\n\n**Profile:** ${input}.jvmprofile\n\nThe JVM profile path has been added to your configuration.`,
+        type: 'success',
+        configChanges: updates,
+        diagramChanges: true,
+        suggestions: ['Add CMCI', 'Create another region', 'Download YAML']
+      };
+    }
+
+    if (inputType === 'cmci_port') {
+      const port = parseInt(message.trim());
+      
+      // Validate port number
+      if (isNaN(port) || port < 1 || port > 65535) {
+        return {
+          text: "❌ Port must be a number between 1 and 65535. Please try again:",
+          type: 'error',
+          suggestions: ['1490', '10443', '12345']
+        };
+      }
+
+      // Add CMCI extension
+      const updates = {
+        extensions: {
+          cics_cmci: {
+            provider: 'JVMSERVER',
+            port: port
+          }
+        }
+      };
+
+      this.configManager.updateConfig(updates);
+      this.context.awaitingInput = null;
+
+      return {
+        text: `✅ **CMCI Enabled!**\n\n**Port:** ${port}\n**Provider:** JVMSERVER\n\nYou can now manage this region remotely using CICS Explorer or REST APIs.`,
+        type: 'success',
+        configChanges: updates,
+        diagramChanges: true,
+        suggestions: ['Create another region', 'Download YAML']
+      };
     }
 
     return this.generateDefaultResponse(message);

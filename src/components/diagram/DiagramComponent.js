@@ -86,37 +86,50 @@ export class DiagramComponent {
     const styles = [];
 
     // CICS Region (always present)
-    components.push(`CICS["🏢 CICS Region<br/><b>${config.applid}</b><br/>${config.memory || '512M'}"]`);
+    const sysidLabel = config.sysid ? `SYSID: ${config.sysid}<br/>` : '';
+    components.push(`CICS["🏢 CICS Region<br/>${sysidLabel}<b>${config.applid}</b>"]`);
     styles.push('class CICS cicsStyle');
 
-    // JVM
-    if (config.jvm && config.jvm.enabled) {
-      components.push(`JVM["☕ JVM<br/>${config.jvm.heap_size || '512M'} heap"]`);
-      connections.push('CICS --> JVM');
-      styles.push('class JVM jvmStyle');
-    }
-
-    // CMCI
-    if (config.cmci && config.cmci.enabled) {
-      components.push(`CMCI["🔧 CMCI<br/>Port ${config.cmci.port || 1490}"]`);
+    // CMCI (optional)
+    if (config.extensions && config.extensions.cics_cmci) {
+      components.push(`CMCI["🔧 CMCI<br/>Port ${config.extensions.cics_cmci.port}"]`);
       connections.push('CICS --> CMCI');
       styles.push('class CMCI cmciStyle');
     }
 
-    // Database
-    if (config.database && config.database.enabled) {
-      components.push(`DB[("🗄️ ${config.database.type || 'DB2'}<br/>Database")]`);
-      connections.push('CICS --> DB');
-      styles.push('class DB dbStyle');
+    // JVM Profiles (optional)
+    if (config.jvm_profiles && config.jvm_profiles.length > 0) {
+      config.jvm_profiles.forEach((profile, index) => {
+        const jvmId = `JVM${index}`;
+        // Extract profile name from path (e.g., "EYUSMSSJ.jvmprofile" -> "EYUSMSSJ")
+        const profileName = profile.replace('.jvmprofile', '');
+        components.push(`${jvmId}["☕ JVM Profile<br/><b>${profileName}</b>"]`);
+        connections.push(`CICS --> ${jvmId}`);
+        styles.push(`class ${jvmId} jvmStyle`);
+      });
     }
 
-    // Datasets
+    // All 8 Datasets (always present when applid exists)
     if (config.applid) {
       components.push(`CSD["📁 CSD<br/>System Definitions"]`);
       components.push(`GCD["📁 GCD<br/>Global Catalog"]`);
+      components.push(`LCD["📁 LCD<br/>Local Catalog"]`);
+      components.push(`ATS["📁 ATS<br/>Aux Temp Storage"]`);
+      components.push(`ATR["📁 ATR<br/>Aux Trace"]`);
+      components.push(`LRQ["📁 LRQ<br/>Local Request Queue"]`);
+      components.push(`TXD["📁 TXD<br/>Transaction Dump"]`);
+      components.push(`TDI["📁 TDI<br/>TD Intrapartition"]`);
+      
       connections.push('CICS -.-> CSD');
       connections.push('CICS -.-> GCD');
-      styles.push('class CSD,GCD datasetStyle');
+      connections.push('CICS -.-> LCD');
+      connections.push('CICS -.-> ATS');
+      connections.push('CICS -.-> ATR');
+      connections.push('CICS -.-> LRQ');
+      connections.push('CICS -.-> TXD');
+      connections.push('CICS -.-> TDI');
+      
+      styles.push('class CSD,GCD,LCD,ATS,ATR,LRQ,TXD,TDI datasetStyle');
     }
 
     // Build the complete diagram
@@ -150,41 +163,58 @@ graph TD
       const regionId = `CICS${index}`;
       
       // CICS Region
-      components.push(`${regionId}["🏢 CICS Region<br/><b>${config.applid}</b><br/>${config.memory || '512M'}"]`);
+      const sysidLabel = config.sysid ? `SYSID: ${config.sysid}<br/>` : '';
+      components.push(`${regionId}["🏢 CICS Region<br/>${sysidLabel}<b>${config.applid}</b>"]`);
       styles.push(`class ${regionId} cicsStyle`);
 
-      // JVM
-      if (config.jvm && config.jvm.enabled) {
-        const jvmId = `JVM${index}`;
-        components.push(`${jvmId}["☕ JVM<br/>${config.jvm.heap_size || '512M'} heap"]`);
-        connections.push(`${regionId} --> ${jvmId}`);
-        styles.push(`class ${jvmId} jvmStyle`);
-      }
-
       // CMCI
-      if (config.cmci && config.cmci.enabled) {
+      if (config.extensions && config.extensions.cics_cmci) {
         const cmciId = `CMCI${index}`;
-        components.push(`${cmciId}["🔧 CMCI<br/>Port ${config.cmci.port || 1490}"]`);
+        components.push(`${cmciId}["🔧 CMCI<br/>Port ${config.extensions.cics_cmci.port}"]`);
         connections.push(`${regionId} --> ${cmciId}`);
         styles.push(`class ${cmciId} cmciStyle`);
       }
 
-      // Database
-      if (config.database && config.database.enabled) {
-        const dbId = `DB${index}`;
-        components.push(`${dbId}[("🗄️ ${config.database.type || 'DB2'}<br/>Database")]`);
-        connections.push(`${regionId} --> ${dbId}`);
-        styles.push(`class ${dbId} dbStyle`);
+      // JVM Profiles
+      if (config.jvm_profiles && config.jvm_profiles.length > 0) {
+        config.jvm_profiles.forEach((profile, pIndex) => {
+          const jvmId = `JVM${index}_${pIndex}`;
+          const profileName = profile.replace('.jvmprofile', '');
+          components.push(`${jvmId}["☕ JVM Profile<br/><b>${profileName}</b>"]`);
+          connections.push(`${regionId} --> ${jvmId}`);
+          styles.push(`class ${jvmId} jvmStyle`);
+        });
       }
 
-      // Datasets
+      // All 8 Datasets
       const csdId = `CSD${index}`;
       const gcdId = `GCD${index}`;
+      const lcdId = `LCD${index}`;
+      const atsId = `ATS${index}`;
+      const atrId = `ATR${index}`;
+      const lrqId = `LRQ${index}`;
+      const txdId = `TXD${index}`;
+      const tdiId = `TDI${index}`;
+      
       components.push(`${csdId}["📁 CSD<br/>${config.applid}"]`);
       components.push(`${gcdId}["📁 GCD<br/>${config.applid}"]`);
+      components.push(`${lcdId}["📁 LCD<br/>${config.applid}"]`);
+      components.push(`${atsId}["📁 ATS<br/>${config.applid}"]`);
+      components.push(`${atrId}["📁 ATR<br/>${config.applid}"]`);
+      components.push(`${lrqId}["📁 LRQ<br/>${config.applid}"]`);
+      components.push(`${txdId}["📁 TXD<br/>${config.applid}"]`);
+      components.push(`${tdiId}["📁 TDI<br/>${config.applid}"]`);
+      
       connections.push(`${regionId} -.-> ${csdId}`);
       connections.push(`${regionId} -.-> ${gcdId}`);
-      styles.push(`class ${csdId},${gcdId} datasetStyle`);
+      connections.push(`${regionId} -.-> ${lcdId}`);
+      connections.push(`${regionId} -.-> ${atsId}`);
+      connections.push(`${regionId} -.-> ${atrId}`);
+      connections.push(`${regionId} -.-> ${lrqId}`);
+      connections.push(`${regionId} -.-> ${txdId}`);
+      connections.push(`${regionId} -.-> ${tdiId}`);
+      
+      styles.push(`class ${csdId},${gcdId},${lcdId},${atsId},${atrId},${lrqId},${txdId},${tdiId} datasetStyle`);
     });
 
     // Build the complete diagram
