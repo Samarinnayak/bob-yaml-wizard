@@ -99,8 +99,7 @@ class App {
 
         // Update YAML if needed
         if (response.configChanges) {
-          const yaml = this.configManager.generateYAML();
-          this.yamlEditor.setContent(yaml);
+          this.updateYAMLEditor();
         }
 
         // Show suggestions if any
@@ -124,14 +123,25 @@ class App {
     });
 
     // YAML actions
-    document.getElementById('copy-yaml')?.addEventListener('click', () => {
-      this.yamlEditor.copyToClipboard();
-      showToast('YAML copied to clipboard!', 'success');
+    document.getElementById('copy-yaml')?.addEventListener('click', async () => {
+      const success = await this.yamlEditor.copyToClipboard();
+      if (success) {
+        showToast('All YAML copied to clipboard!', 'success');
+      }
     });
 
     document.getElementById('download-yaml')?.addEventListener('click', () => {
-      this.yamlEditor.downloadFile('cics-region.yaml');
-      showToast('YAML downloaded!', 'success');
+      this.yamlEditor.downloadFile('cics-regions.yaml');
+      showToast('All YAML downloaded!', 'success');
+    });
+
+    // Listen for individual region copy/download events
+    window.addEventListener('yaml-copied', (e) => {
+      showToast(`YAML for ${e.detail.applid} copied!`, 'success');
+    });
+
+    window.addEventListener('yaml-downloaded', (e) => {
+      showToast(`YAML for ${e.detail.applid} downloaded!`, 'success');
     });
 
     // Diagram actions
@@ -212,15 +222,18 @@ class App {
     this.configManager.setSelectedRegion(applid);
     console.log('Selected region set to:', applid);
 
-    // Update YAML to show only selected region
-    const yaml = this.configManager.generateYAML();
-    console.log('Generated YAML length:', yaml.length);
-    console.log('YAML preview:', yaml.substring(0, 200));
-    
-    this.yamlEditor.setContent(yaml);
-    console.log('YAML content set in editor');
+    // Update YAML editor to show only selected region
+    this.updateYAMLEditor(applid);
 
     showToast(`Viewing YAML for region ${applid}`, 'info');
+  }
+
+  updateYAMLEditor(selectedApplid = null) {
+    const allRegions = this.configManager.getAllRegions();
+    console.log('updateYAMLEditor - regions:', allRegions.map(r => r.applid));
+    console.log('updateYAMLEditor - selected:', selectedApplid);
+    
+    this.yamlEditor.setRegions(allRegions, selectedApplid);
   }
 
   async handleDuplicateRegion(currentConfig) {
@@ -246,16 +259,15 @@ class App {
             allRegions.length > 0 ? allRegions : null
           );
 
-          // Update YAML
-          const yaml = this.configManager.generateYAML();
-          this.yamlEditor.setContent(yaml);
+          // Update YAML editor
+          this.updateYAMLEditor();
 
           // Add message to chat
           const regionCount = allRegions.length;
           this.chat.addMessage('bob',
             `✅ Successfully duplicated region to **${newProperties.applid}**!\n\n` +
             `You now have **${regionCount} region${regionCount > 1 ? 's' : ''}** configured. ` +
-            `Both regions are visible in the diagram and included in the YAML output.`,
+            `All regions are visible in the diagram and YAML panel.`,
             { type: 'success' }
           );
 

@@ -408,10 +408,174 @@ code {
 }
 
 /* ============================================
-   YAML Editor Panel
+   YAML Editor Panel - Accordion Structure
    ============================================ */
 
 .yaml-editor {
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.yaml-accordion-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.yaml-accordion-item {
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+  transition: all 0.3s ease;
+}
+
+.yaml-accordion-item:last-child {
+  border-bottom: none;
+}
+
+.yaml-accordion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md);
+  cursor: pointer;
+  background: var(--surface);
+  transition: background-color 0.2s ease;
+  gap: var(--spacing-md);
+}
+
+.yaml-accordion-header:hover {
+  background: var(--border);
+}
+
+.yaml-accordion-header-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.yaml-accordion-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.yaml-accordion-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.yaml-accordion-region-name {
+  font-size: 1rem;
+  font-family: var(--font-mono);
+}
+
+.yaml-accordion-region-info {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+  margin-left: var(--spacing-sm);
+}
+
+.yaml-accordion-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+.yaml-action-btn {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+}
+
+.yaml-action-btn:hover {
+  background: var(--primary-blue);
+  border-color: var(--primary-blue);
+  color: white;
+}
+
+.yaml-action-btn .icon {
+  font-size: 1rem;
+}
+
+.yaml-expand-btn {
+  transition: transform 0.3s ease;
+}
+
+.yaml-accordion-item.expanded .yaml-expand-btn {
+  transform: rotate(180deg);
+}
+
+.yaml-accordion-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+  background: var(--background);
+}
+
+.yaml-accordion-item.expanded .yaml-accordion-content {
+  max-height: 2000px;
+  border-top: 1px solid var(--border);
+}
+
+.yaml-code {
+  margin: 0;
+  padding: var(--spacing-md);
+  background: var(--background);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.yaml-code code {
+  font-family: inherit;
+}
+
+/* YAML Syntax Highlighting */
+.yaml-comment {
+  color: #6a737d;
+  font-style: italic;
+}
+
+.yaml-key {
+  color: var(--primary-blue);
+  font-weight: 600;
+}
+
+.yaml-string {
+  color: #24a148;
+}
+
+.yaml-number {
+  color: #8a3ffc;
+}
+
+.yaml-boolean {
+  color: #da1e28;
+  font-weight: 600;
+}
+
+.yaml-null {
+  color: #999;
+  font-style: italic;
+}
+
+/* Legacy YAML Editor Styles (for backward compatibility) */
+.yaml-editor-legacy {
   padding: var(--spacing-md);
   font-family: var(--font-mono);
   font-size: 0.875rem;
