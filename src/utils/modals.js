@@ -206,8 +206,8 @@ export function showAlertDialog(title, message) {
   return modal;
 }
 
-export function showDuplicateRegionDialog(currentConfig, onConfirm, onCancel) {
-  const suggestedApplid = generateUniqueApplid(currentConfig.applid);
+export function showDuplicateRegionDialog(currentConfig, onConfirm, onCancel, existingRegions = []) {
+  const suggestedApplid = generateUniqueApplid(currentConfig.applid, existingRegions);
   
   const content = `
     <p>Duplicate region <strong>${currentConfig.applid}</strong> with new properties:</p>
@@ -336,17 +336,36 @@ export function showDuplicateRegionDialog(currentConfig, onConfirm, onCancel) {
   return modal;
 }
 
-function generateUniqueApplid(currentApplid) {
+function generateUniqueApplid(currentApplid, existingRegions = []) {
+  // Get all existing APPLIDs
+  const existingAppids = existingRegions.map(r => r.applid);
+  existingAppids.push(currentApplid); // Include current one too
+
   // Extract base name and number
   const match = currentApplid.match(/^([A-Z]+)(\d*)$/);
   if (match) {
     const base = match[1];
-    const num = match[2] ? parseInt(match[2]) : 1;
-    const newNum = num + 1;
-    const newApplid = base + newNum;
-    return newApplid.substring(0, 8); // Ensure max 8 chars
+    let num = match[2] ? parseInt(match[2]) : 1;
+    
+    // Keep incrementing until we find a unique APPLID
+    let newApplid;
+    do {
+      num++;
+      newApplid = (base + num).substring(0, 8); // Ensure max 8 chars
+    } while (existingAppids.includes(newApplid));
+    
+    return newApplid;
   }
-  return currentApplid + '2';
+  
+  // Fallback: append numbers until unique
+  let suffix = 2;
+  let newApplid;
+  do {
+    newApplid = (currentApplid + suffix).substring(0, 8);
+    suffix++;
+  } while (existingAppids.includes(newApplid));
+  
+  return newApplid;
 }
 
 // Made with Bob

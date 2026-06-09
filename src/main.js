@@ -90,7 +90,11 @@ class App {
 
         // Update diagram if needed
         if (response.diagramChanges) {
-          await this.diagram.render(this.configManager.getConfig());
+          const allRegions = this.configManager.getAllRegions();
+          await this.diagram.render(
+            this.configManager.getConfig(),
+            allRegions.length > 0 ? allRegions : null
+          );
         }
 
         // Update YAML if needed
@@ -188,15 +192,46 @@ class App {
   }
 
   setupDiagramHandlers() {
-    // Handle region click events from diagram
+    // Handle region context menu (right-click) events from diagram
     this.diagram.setRegionClickHandler((action, config) => {
       if (action === 'duplicate') {
         this.handleDuplicateRegion(config);
       }
     });
+
+    // Handle region selection (left-click) events from diagram
+    this.diagram.setRegionSelectHandler((applid) => {
+      this.handleRegionSelection(applid);
+    });
+  }
+
+  handleRegionSelection(applid) {
+    console.log('handleRegionSelection called with applid:', applid);
+    
+    // Set selected region in config manager
+    this.configManager.setSelectedRegion(applid);
+    console.log('Selected region set to:', applid);
+
+    // Update YAML to show only selected region
+    const yaml = this.configManager.generateYAML();
+    console.log('Generated YAML length:', yaml.length);
+    console.log('YAML preview:', yaml.substring(0, 200));
+    
+    this.yamlEditor.setContent(yaml);
+    console.log('YAML content set in editor');
+
+    showToast(`Viewing YAML for region ${applid}`, 'info');
   }
 
   async handleDuplicateRegion(currentConfig) {
+    // Get all existing regions including the current one
+    const existingRegions = this.configManager.getAllRegions();
+    
+    // If regions array is empty, add current config
+    if (existingRegions.length === 0 && currentConfig.applid) {
+      existingRegions.push(currentConfig);
+    }
+    
     showDuplicateRegionDialog(
       currentConfig,
       async (newProperties) => {
@@ -204,18 +239,23 @@ class App {
         const result = this.configManager.duplicateRegion(newProperties);
 
         if (result.success) {
-          // Update diagram
-          await this.diagram.render(this.configManager.getConfig());
+          // Update diagram with all regions
+          const allRegions = this.configManager.getAllRegions();
+          await this.diagram.render(
+            this.configManager.getConfig(),
+            allRegions.length > 0 ? allRegions : null
+          );
 
           // Update YAML
           const yaml = this.configManager.generateYAML();
           this.yamlEditor.setContent(yaml);
 
           // Add message to chat
+          const regionCount = allRegions.length;
           this.chat.addMessage('bob',
             `✅ Successfully duplicated region to **${newProperties.applid}**!\n\n` +
-            `The new region has been created with your specified properties. ` +
-            `You can continue to modify it or create another configuration.`,
+            `You now have **${regionCount} region${regionCount > 1 ? 's' : ''}** configured. ` +
+            `Both regions are visible in the diagram and included in the YAML output.`,
             { type: 'success' }
           );
 
@@ -231,7 +271,8 @@ class App {
       () => {
         // User cancelled
         console.log('Duplicate region cancelled');
-      }
+      },
+      existingRegions
     );
   }
 }

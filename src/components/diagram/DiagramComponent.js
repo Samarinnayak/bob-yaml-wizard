@@ -16,6 +16,7 @@ export class DiagramComponent {
     this.currentConfig = null;
     this.zoomLevel = 1;
     this.onRegionClick = null; // Callback for region clicks
+    this.onRegionSelect = null; // Callback for region selection (to show YAML)
 
     // Initialize Mermaid
     mermaid.initialize({
@@ -33,8 +34,9 @@ export class DiagramComponent {
   /**
    * Render diagram from configuration
    */
-  async render(config) {
+  async render(config, allRegions = null) {
     this.currentConfig = config;
+    this.allRegions = allRegions;
 
     // Clear placeholder if exists
     const placeholder = this.container.querySelector('.diagram-placeholder');
@@ -43,7 +45,9 @@ export class DiagramComponent {
     }
 
     // Generate Mermaid code
-    const mermaidCode = this.generateMermaidCode(config);
+    const mermaidCode = allRegions && allRegions.length > 1
+      ? this.generateMultiRegionMermaidCode(allRegions)
+      : this.generateMermaidCode(config);
 
     try {
       // Create unique ID for this diagram
@@ -114,6 +118,74 @@ export class DiagramComponent {
       connections.push('CICS -.-> GCD');
       styles.push('class CSD,GCD datasetStyle');
     }
+
+    // Build the complete diagram
+    const mermaidCode = `
+graph TD
+    ${components.join('\n    ')}
+
+    ${connections.join('\n    ')}
+
+    classDef cicsStyle fill:#0f62fe,stroke:#fff,stroke-width:2px,color:#fff
+    classDef jvmStyle fill:#24a148,stroke:#fff,stroke-width:2px,color:#fff
+    classDef cmciStyle fill:#8a3ffc,stroke:#fff,stroke-width:2px,color:#fff
+    classDef dbStyle fill:#da1e28,stroke:#fff,stroke-width:2px,color:#fff
+    classDef datasetStyle fill:#f1c21b,stroke:#333,stroke-width:2px,color:#333
+
+    ${styles.join('\n    ')}
+`;
+
+    return mermaidCode;
+  }
+
+  /**
+   * Generate Mermaid code for multiple regions
+   */
+  generateMultiRegionMermaidCode(regions) {
+    const components = [];
+    const connections = [];
+    const styles = [];
+
+    regions.forEach((config, index) => {
+      const regionId = `CICS${index}`;
+      
+      // CICS Region
+      components.push(`${regionId}["🏢 CICS Region<br/><b>${config.applid}</b><br/>${config.memory || '512M'}"]`);
+      styles.push(`class ${regionId} cicsStyle`);
+
+      // JVM
+      if (config.jvm && config.jvm.enabled) {
+        const jvmId = `JVM${index}`;
+        components.push(`${jvmId}["☕ JVM<br/>${config.jvm.heap_size || '512M'} heap"]`);
+        connections.push(`${regionId} --> ${jvmId}`);
+        styles.push(`class ${jvmId} jvmStyle`);
+      }
+
+      // CMCI
+      if (config.cmci && config.cmci.enabled) {
+        const cmciId = `CMCI${index}`;
+        components.push(`${cmciId}["🔧 CMCI<br/>Port ${config.cmci.port || 1490}"]`);
+        connections.push(`${regionId} --> ${cmciId}`);
+        styles.push(`class ${cmciId} cmciStyle`);
+      }
+
+      // Database
+      if (config.database && config.database.enabled) {
+        const dbId = `DB${index}`;
+        components.push(`${dbId}[("🗄️ ${config.database.type || 'DB2'}<br/>Database")]`);
+        connections.push(`${regionId} --> ${dbId}`);
+        styles.push(`class ${dbId} dbStyle`);
+      }
+
+      // Datasets
+      const csdId = `CSD${index}`;
+      const gcdId = `GCD${index}`;
+      components.push(`${csdId}["📁 CSD<br/>${config.applid}"]`);
+      components.push(`${gcdId}["📁 GCD<br/>${config.applid}"]`);
+      connections.push(`${regionId} -.-> ${csdId}`);
+      connections.push(`${regionId} -.-> ${gcdId}`);
+      styles.push(`class ${csdId},${gcdId} datasetStyle`);
+    });
 
     // Build the complete diagram
     const mermaidCode = `

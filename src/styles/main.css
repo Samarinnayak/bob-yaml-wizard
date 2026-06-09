@@ -221,12 +221,25 @@ code {
    Chat Panel
    ============================================ */
 
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-panel .panel-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .chat-messages {
+  flex: 1;
   padding: var(--spacing-md);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
-  min-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .message {
@@ -310,6 +323,10 @@ code {
   padding: var(--spacing-md);
   border-top: 1px solid var(--border);
   background: var(--surface);
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
 }
 
 .typing-indicator {
