@@ -10,7 +10,7 @@ import { DiagramComponent } from './components/diagram/DiagramComponent.js';
 import { YAMLEditorComponent } from './components/editor/YAMLEditorComponent.js';
 import { BobBrain } from './core/bob-brain.js';
 import { ConfigurationManager } from './core/config-manager.js';
-import { setupModals } from './utils/modals.js';
+import { setupModals, showDuplicateRegionDialog } from './utils/modals.js';
 import { setupTheme } from './utils/theme.js';
 import { showToast } from './utils/toast.js';
 
@@ -46,6 +46,9 @@ class App {
 
       // Setup mobile tabs
       this.setupMobileTabs();
+
+      // Setup diagram region click handler
+      this.setupDiagramHandlers();
 
       console.log('✅ Application initialized successfully');
       showToast('Welcome to Bob YAML Wizard!', 'success');
@@ -87,7 +90,11 @@ class App {
 
         // Update diagram if needed
         if (response.diagramChanges) {
-          await this.diagram.render(this.configManager.getConfig());
+          const allRegions = this.configManager.getAllRegions();
+          await this.diagram.render(
+            this.configManager.getConfig(),
+            allRegions.length > 0 ? allRegions : null
+          );
         }
 
         // Update YAML if needed
@@ -182,6 +189,91 @@ class App {
         document.querySelector(`[data-content="${tabName}"]`)?.classList.add('active');
       });
     });
+  }
+
+  setupDiagramHandlers() {
+    // Handle region context menu (right-click) events from diagram
+    this.diagram.setRegionClickHandler((action, config) => {
+      if (action === 'duplicate') {
+        this.handleDuplicateRegion(config);
+      }
+    });
+
+    // Handle region selection (left-click) events from diagram
+    this.diagram.setRegionSelectHandler((applid) => {
+      this.handleRegionSelection(applid);
+    });
+  }
+
+  handleRegionSelection(applid) {
+    console.log('handleRegionSelection called with applid:', applid);
+    
+    // Set selected region in config manager
+    this.configManager.setSelectedRegion(applid);
+    console.log('Selected region set to:', applid);
+
+    // Update YAML to show only selected region
+    const yaml = this.configManager.generateYAML();
+    console.log('Generated YAML length:', yaml.length);
+    console.log('YAML preview:', yaml.substring(0, 200));
+    
+    this.yamlEditor.setContent(yaml);
+    console.log('YAML content set in editor');
+
+    showToast(`Viewing YAML for region ${applid}`, 'info');
+  }
+
+  async handleDuplicateRegion(currentConfig) {
+    // Get all existing regions including the current one
+    const existingRegions = this.configManager.getAllRegions();
+    
+    // If regions array is empty, add current config
+    if (existingRegions.length === 0 && currentConfig.applid) {
+      existingRegions.push(currentConfig);
+    }
+    
+    showDuplicateRegionDialog(
+      currentConfig,
+      async (newProperties) => {
+        // Attempt to duplicate the region
+        const result = this.configManager.duplicateRegion(newProperties);
+
+        if (result.success) {
+          // Update diagram with all regions
+          const allRegions = this.configManager.getAllRegions();
+          await this.diagram.render(
+            this.configManager.getConfig(),
+            allRegions.length > 0 ? allRegions : null
+          );
+
+          // Update YAML
+          const yaml = this.configManager.generateYAML();
+          this.yamlEditor.setContent(yaml);
+
+          // Add message to chat
+          const regionCount = allRegions.length;
+          this.chat.addMessage('bob',
+            `✅ Successfully duplicated region to **${newProperties.applid}**!\n\n` +
+            `You now have **${regionCount} region${regionCount > 1 ? 's' : ''}** configured. ` +
+            `Both regions are visible in the diagram and included in the YAML output.`,
+            { type: 'success' }
+          );
+
+          showToast(`Region duplicated as ${newProperties.applid}!`, 'success');
+        } else {
+          showToast(result.error || 'Failed to duplicate region', 'error');
+          this.chat.addMessage('bob',
+            `❌ Failed to duplicate region: ${result.error}`,
+            { type: 'error' }
+          );
+        }
+      },
+      () => {
+        // User cancelled
+        console.log('Duplicate region cancelled');
+      },
+      existingRegions
+    );
   }
 }
 
